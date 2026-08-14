@@ -14,8 +14,10 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" \
 # ---------- runtime stage: Go binary + Semgrep + Trivy CLIs ----------
 FROM python:3.12-slim-bookworm AS runtime
 
-# Pin Trivy; Semgrep tracks latest for now (pin in v2). See plan §8.
-ARG TRIVY_VERSION=0.58.1
+# Pin Trivy to a REAL released version (github.com/aquasecurity/trivy/releases).
+# NOTE: 0.58.1 never existed and 404'd the download, failing the whole build.
+# Semgrep tracks latest for now (pin in v2). See plan §8.
+ARG TRIVY_VERSION=0.73.0
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         git ca-certificates curl tar \
