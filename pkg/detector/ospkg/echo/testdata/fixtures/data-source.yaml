@@ -1,7 +1,0 @@
-- bucket: data-source
-  pairs:
-    - key: echo
-      value:
-        ID: "echo"
-        Name: "Echo"
-        URL: "https://advisory.echohq.com/data.json"

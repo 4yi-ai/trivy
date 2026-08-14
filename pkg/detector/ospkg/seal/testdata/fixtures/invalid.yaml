@@ -1,9 +1,0 @@
-- bucket: seal alpine
-  pairs:
-    - bucket: seal-jq
-      pairs:
-        - key: CVE-2020-8177
-          value:
-            FixedVersion:
-              - foo
-              - bar

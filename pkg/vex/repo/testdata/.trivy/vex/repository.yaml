@@ -1,4 +1,0 @@
-repositories:
-  - name: "test-repo"
-    url: "https://localhost"
-    enabled: true
