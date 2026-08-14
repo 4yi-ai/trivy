@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 )
@@ -78,6 +80,14 @@ func CloneGit(ctx context.Context, cleanURL, token, dir string, g Guards) error 
 			msg = strings.ReplaceAll(msg, token, "***")
 		}
 		return fmt.Errorf("git clone failed: %v: %s", err, strings.TrimSpace(lastLine(msg)))
+	}
+
+	// Delete .git BEFORE scanning: `git clone <token>@host` writes the tokenized
+	// URL into .git/config, and Trivy's secret scanner would otherwise read it
+	// and persist the user's use-once token into the findings DB. The git
+	// metadata is useless for SAST/SCA anyway.
+	if err := os.RemoveAll(filepath.Join(dir, ".git")); err != nil {
+		return fmt.Errorf("strip .git after clone: %w", err)
 	}
 
 	return enforceSize(dir, g)

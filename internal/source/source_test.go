@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -94,6 +95,43 @@ func TestExtractZipSizeCap(t *testing.T) {
 	g := Guards{MaxBytes: 1024} // smaller than the entry
 	if err := ExtractArchive(context.Background(), archive, dest, g); err == nil {
 		t.Fatal("expected size-cap rejection")
+	}
+}
+
+// TestCloneStripsGitDir clones a local repo (file://, no network) and verifies
+// the working files land while .git is removed — the fix that keeps a tokenized
+// remote URL out of the scanned tree.
+func TestCloneStripsGitDir(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	origin := t.TempDir()
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = origin
+		cmd.Env = append(os.Environ(),
+			"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, out)
+		}
+	}
+	run("init", "-q", "-b", "main")
+	if err := os.WriteFile(filepath.Join(origin, "main.go"), []byte("package main"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run("add", ".")
+	run("commit", "-q", "-m", "init")
+
+	dest := filepath.Join(t.TempDir(), "src")
+	if err := CloneGit(context.Background(), "file://"+origin, "", dest, DefaultGuards()); err != nil {
+		t.Fatalf("clone: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dest, "main.go")); err != nil {
+		t.Errorf("cloned working file missing: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dest, ".git")); !os.IsNotExist(err) {
+		t.Errorf(".git should have been stripped after clone (err=%v)", err)
 	}
 }
 
