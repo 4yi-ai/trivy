@@ -6,9 +6,9 @@ jobs/
 *.db
 *.db-wal
 *.db-shm
-codescan
+# The built binary at repo root — anchored so it does NOT exclude cmd/codescan/ source.
+/codescan
 .env
 docs/
-README.md
-*.md
-!rules/README.md
+# Exclude root-level docs but NOT source .md that COPY needs.
+/README.md
