@@ -56,8 +56,16 @@ RUN set -eux; \
     git clone --depth 1 --branch "${SEMGREP_RULES_REF}" \
         https://github.com/semgrep/semgrep-rules.git /app/rules/registry; \
     rm -rf /app/rules/registry/.git; \
-    # Drop non-rule material to keep the image lean and avoid parse noise.
-    find /app/rules/registry -type d \( -name '.github' -o -name 'stats' -o -name 'template' \) -prune -exec rm -rf {} +; \
+    # Prune dirs that hold no OSS-usable rules (Apex needs Semgrep Pro) or non-rule
+    # material, to keep the image lean and cut scan noise.
+    find /app/rules/registry -type d \( -name '.github' -o -name 'stats' -o -name 'template' -o -name 'apex' \) -prune -exec rm -rf {} +; \
+    # CRITICAL: remove repo-level config files (e.g. .pre-commit-config.yaml, mkdocs.yml).
+    # `semgrep --config <dir>` loads every *.yaml as a rule; ONE non-rule config
+    # makes semgrep exit 7 ("invalid configuration file found") and fail the whole
+    # scan — even with 2000+ valid rules present. Verified locally.
+    find /app/rules/registry -type f \( -name '.*.yaml' -o -name '.*.yml' -o -name 'mkdocs.yml' \) -delete; \
+    # Drop test fixtures (never rules) to slim the image.
+    find /app/rules/registry -type f \( -name '*.test.yaml' -o -name '*.test.yml' -o -name '*.fixed.*' \) -delete; \
     echo "vendored semgrep rules: $(find /app/rules/registry -name '*.yaml' -o -name '*.yml' | wc -l) files"
 
 ENV HOST=0.0.0.0 \
