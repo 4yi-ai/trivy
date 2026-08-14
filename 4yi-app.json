@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "services": [
+    {
+      "name": "web",
+      "type": "web",
+      "imageSource": "build",
+      "dockerfile": "Dockerfile",
+      "context": ".",
+      "route": "public",
+      "port": 8080,
+      "healthPath": "/healthz",
+      "env": {
+        "HOST": "0.0.0.0",
+        "PORT": "8080",
+        "DATA_DIR": "/app/data",
+        "TRIVY_CACHE_DIR": "/app/data/trivy-cache"
+      },
+      "storage": { "sizeGb": 10, "mountPath": "/app/data", "fsGroup": 10001 },
+      "resources": { "cpu": 1.5, "memoryMb": 6144 }
+    }
+  ]
+}

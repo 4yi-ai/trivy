@@ -1,0 +1,14 @@
+# Keep the build context small and reproducible.
+.git
+.gitignore
+data/
+jobs/
+*.db
+*.db-wal
+*.db-shm
+codescan
+.env
+docs/
+README.md
+*.md
+!rules/README.md

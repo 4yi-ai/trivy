@@ -1,0 +1,31 @@
+{{define "base"}}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{block "title" .}}CodeScan{{end}}</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">CodeScan</a>
+    <span class="brand-sub">Semgrep · Trivy</span>
+  </header>
+  <main class="wrap">
+    {{block "content" .}}{{end}}
+  </main>
+  <footer class="foot">
+    Runs Semgrep + Trivy as bundled CLIs — no source forks, no LLM, zero tokens.
+  </footer>
+  <script src="/static/app.js"></script>
+</body>
+</html>{{end}}
+
+{{define "sevcounts"}}{{if .}}<span class="counts">
+{{if .Critical}}<span class="pill c-critical">{{.Critical}}C</span>{{end}}
+{{if .High}}<span class="pill c-high">{{.High}}H</span>{{end}}
+{{if .Medium}}<span class="pill c-medium">{{.Medium}}M</span>{{end}}
+{{if .Low}}<span class="pill c-low">{{.Low}}L</span>{{end}}
+{{if .Info}}<span class="pill c-info">{{.Info}}I</span>{{end}}
+{{if and (not .Critical) (not .High) (not .Medium) (not .Low) (not .Info)}}<span class="muted">clean</span>{{end}}
+</span>{{else}}<span class="muted">—</span>{{end}}{{end}}

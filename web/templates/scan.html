@@ -1,0 +1,60 @@
+{{define "title"}}Scan {{.Job.ID}}{{end}}
+{{define "content"}}
+<section class="card" id="job-card" data-job-id="{{.Job.ID}}" data-status="{{.Job.Status}}">
+  <div class="row-between">
+    <h1>Scan result</h1>
+    <a class="muted small" href="/">← all scans</a>
+  </div>
+  <dl class="meta">
+    <div><dt>Source</dt><dd class="mono">{{.Job.SourceRef}}</dd></div>
+    <div><dt>Type</dt><dd>{{.Job.SourceType}}</dd></div>
+    <div><dt>Status</dt><dd><span class="badge s-{{.Job.Status}}" id="job-status">{{.Job.Status}}</span>
+      <span class="muted small" id="job-progress">{{.Job.Progress}}</span></dd></div>
+    <div><dt>Findings</dt><dd id="job-summary">{{template "sevcounts" .Job.Summary}}</dd></div>
+  </dl>
+  {{if .Job.Error}}<p class="error">Error: {{.Job.Error}}</p>{{end}}
+  <div class="actions">
+    <a class="btn" href="/api/scans/{{.Job.ID}}/export?format=json">Export JSON</a>
+    <a class="btn" href="/api/scans/{{.Job.ID}}/export?format=sarif">Export SARIF</a>
+    {{if or (eq .Job.Status "queued") (eq .Job.Status "fetching") (eq .Job.Status "scanning")}}
+    <button class="btn danger" id="cancel-btn">Cancel</button>
+    <span class="muted small" id="live-note">live — updating…</span>
+    {{end}}
+  </div>
+</section>
+
+<section class="card" id="findings-card">
+  <div class="row-between">
+    <h2>Findings <span class="muted small">({{len .Findings}})</span></h2>
+    <div class="filters" id="filters">
+      <a href="#" data-filter="" class="active">all</a>
+      <a href="#" data-filter="critical">critical</a>
+      <a href="#" data-filter="high">high</a>
+      <a href="#" data-filter="medium">medium</a>
+      <a href="#" data-filter="low">low</a>
+    </div>
+  </div>
+
+  <table class="findings" id="findings-table">
+    <thead><tr><th>Sev</th><th>Category</th><th>Rule</th><th>Location</th><th>Detail</th></tr></thead>
+    <tbody>
+      {{range .Findings}}
+      <tr data-sev="{{.Severity}}">
+        <td><span class="pill c-{{.Severity}}">{{.Severity}}</span></td>
+        <td>{{.Category}}</td>
+        <td class="mono small">{{.RuleID}}</td>
+        <td class="mono small">{{.FilePath}}{{if .Line}}:{{.Line}}{{end}}
+          {{if .PkgName}}<span class="muted">{{.PkgName}}{{if .PkgVer}}@{{.PkgVer}}{{end}}</span>{{end}}</td>
+        <td>{{.Title}}{{if .FixedVer}} <span class="muted small">fix: {{.FixedVer}}</span>{{end}}</td>
+      </tr>
+      {{else}}
+      <tr id="no-findings"><td colspan="5" class="muted">
+        {{if or (eq .Job.Status "queued") (eq .Job.Status "fetching") (eq .Job.Status "scanning")}}
+          Scan in progress…
+        {{else}}No findings.{{end}}
+      </td></tr>
+      {{end}}
+    </tbody>
+  </table>
+</section>
+{{end}}

@@ -1,0 +1,54 @@
+{{define "title"}}CodeScan — new scan{{end}}
+{{define "content"}}
+<section class="card">
+  <h1>New scan</h1>
+  <div class="tabs">
+    <button type="button" class="tab active" data-tab="git">Public Git repo</button>
+    <button type="button" class="tab" data-tab="zip">Upload zip/tar</button>
+  </div>
+
+  <form id="git-form" class="scan-form" data-panel="git">
+    <label>Repository URL
+      <input type="url" name="source_ref" placeholder="https://github.com/org/repo.git" required>
+    </label>
+    <label>Access token <span class="muted">(private repos only — used once, never stored)</span>
+      <input type="password" name="token" autocomplete="off" placeholder="optional">
+    </label>
+    <button type="submit">Start scan</button>
+    <p class="hint">Allowed hosts: github.com, gitlab.com. HTTPS only.</p>
+  </form>
+
+  <form id="zip-form" class="scan-form hidden" data-panel="zip" enctype="multipart/form-data">
+    <label>Archive (.zip / .tar / .tar.gz)
+      <input type="file" name="archive" accept=".zip,.tar,.gz,.tgz" required>
+    </label>
+    <button type="submit">Upload &amp; scan</button>
+    <p class="hint">Max upload 200 MiB. Extracted tree capped at 2 GiB.</p>
+  </form>
+
+  <p id="form-error" class="error hidden"></p>
+</section>
+
+<section class="card">
+  <div class="row-between">
+    <h2>Recent scans</h2>
+    <a class="muted small" href="/">refresh</a>
+  </div>
+  <table class="scans" id="scan-list">
+    <thead><tr><th>Source</th><th>Type</th><th>Status</th><th>Findings</th><th>Created</th></tr></thead>
+    <tbody>
+      {{range .Scans}}
+      <tr>
+        <td class="mono"><a href="/scans/{{.ID}}">{{.SourceRef}}</a></td>
+        <td>{{.SourceType}}</td>
+        <td><span class="badge s-{{.Status}}">{{.Status}}</span></td>
+        <td>{{template "sevcounts" .Summary}}</td>
+        <td class="muted small" data-ts="{{.CreatedAt}}">{{.CreatedAt}}</td>
+      </tr>
+      {{else}}
+      <tr><td colspan="5" class="muted">No scans yet.</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+</section>
+{{end}}

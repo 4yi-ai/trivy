@@ -1,0 +1,7 @@
+/data/
+/jobs/
+codescan
+*.db
+.env
+# Semgrep rules are vendored into the image at build time (Dockerfile), not the repo.
+/rules/registry/
