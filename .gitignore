@@ -1,6 +1,7 @@
 /data/
 /jobs/
-codescan
+# The built binary at repo root — anchored so it does NOT match the cmd/codescan/ source dir.
+/codescan
 *.db
 .env
 # Semgrep rules are vendored into the image at build time (Dockerfile), not the repo.
