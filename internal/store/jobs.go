@@ -201,6 +201,17 @@ func (s *Store) Fail(ctx context.Context, id, reason string) error {
 	return mustAffect(res)
 }
 
+// SetError records a message in the error column WITHOUT changing status. Used
+// for a partial-success warning (e.g. one scanner failed but others produced
+// results, so the job is still done).
+func (s *Store) SetError(ctx context.Context, id, msg string) error {
+	res, err := s.db.ExecContext(ctx, `UPDATE jobs SET error = ? WHERE id = ?`, msg, id)
+	if err != nil {
+		return fmt.Errorf("set error: %w", err)
+	}
+	return mustAffect(res)
+}
+
 // SetSummary writes the per-severity counts (JSON column).
 func (s *Store) SetSummary(ctx context.Context, id string, sum Summary) error {
 	b, err := json.Marshal(sum)

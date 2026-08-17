@@ -12,7 +12,10 @@
       <span class="muted small" id="job-progress">{{.Job.Progress}}</span></dd></div>
     <div><dt>Findings</dt><dd id="job-summary">{{template "sevcounts" .Job.Summary}}</dd></div>
   </dl>
-  {{if .Job.Error}}<p class="error">Error: {{.Job.Error}}</p>{{end}}
+  {{if .Job.Error}}
+    {{if eq .Job.Status "done"}}<p class="warn">Note: {{.Job.Error}}</p>
+    {{else}}<p class="error">Error: {{.Job.Error}}</p>{{end}}
+  {{end}}
   <div class="actions">
     <a class="btn primary" href="/api/scans/{{.Job.ID}}/export?format=pdf">Download PDF report</a>
     <a class="btn" href="/api/scans/{{.Job.ID}}/export?format=json">Export JSON</a>

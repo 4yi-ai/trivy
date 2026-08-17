@@ -50,6 +50,8 @@ func (r *realRunner) Run(ctx context.Context, job *store.Job, sec Secret) error 
 		return err
 	}
 	var all []store.Finding
+	var engineErrs []string
+	ran := 0
 	for _, e := range r.engines {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -61,8 +63,17 @@ func (r *realRunner) Run(ctx context.Context, job *store.Job, sec Secret) error 
 		_ = r.store.SetStatus(ctx, job.ID, store.StatusScanning, "running "+e.Name())
 		found, err := e.Scan(ctx, srcDir)
 		if err != nil {
-			return fmt.Errorf("%s: %w", e.Name(), err)
+			// One engine failing must not discard the other engine's results:
+			// record the error and keep going (plan: scanner should be resilient).
+			// If the context was canceled/timed out, that's fatal for the whole job.
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			log.Printf("job %s: engine %s failed: %v", job.ID, e.Name(), err)
+			engineErrs = append(engineErrs, fmt.Sprintf("%s: %v", e.Name(), err))
+			continue
 		}
+		ran++
 		for i := range found {
 			found[i].JobID = job.ID
 		}
@@ -73,7 +84,20 @@ func (r *realRunner) Run(ctx context.Context, job *store.Job, sec Secret) error 
 	if err := r.store.InsertFindings(ctx, all); err != nil {
 		return err
 	}
-	return r.store.SetSummary(ctx, job.ID, summarize(all))
+	if err := r.store.SetSummary(ctx, job.ID, summarize(all)); err != nil {
+		return err
+	}
+
+	switch {
+	case ran == 0 && len(engineErrs) > 0:
+		// Every engine failed → the scan failed.
+		return fmt.Errorf("%s", strings.Join(engineErrs, "; "))
+	case len(engineErrs) > 0:
+		// Partial success: keep the results we have, but surface a warning so the
+		// user knows one scanner did not complete.
+		return r.store.SetError(ctx, job.ID, "some scanners did not complete: "+strings.Join(engineErrs, "; "))
+	}
+	return nil
 }
 
 // fetch materializes the source into srcDir per job.SourceType.

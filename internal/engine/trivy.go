@@ -28,6 +28,11 @@ func (e *TrivyFS) Scan(ctx context.Context, dir string) ([]store.Finding, error)
 		"--format", "json",
 		"--quiet",
 		"--no-progress",
+		// --offline-scan: never reach out to external registries (e.g. Maven
+		// Central) to resolve dependencies. The 4YI pod has restricted egress and
+		// external repos rate-limit (429) the shared IP; offline keeps SCA working
+		// from local lockfiles/manifests instead of failing the whole scan.
+		"--offline-scan",
 		dir,
 	}
 	// trivy returns 0 even with findings (default exit-code); accept 0 only.
