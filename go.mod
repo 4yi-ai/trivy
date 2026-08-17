@@ -2,7 +2,10 @@ module github.com/4yi-ai/codescan
 
 go 1.26.1
 
-require modernc.org/sqlite v1.34.4
+require (
+	github.com/go-pdf/fpdf v0.9.0
+	modernc.org/sqlite v1.34.4
+)
 
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect

@@ -14,6 +14,7 @@
   </dl>
   {{if .Job.Error}}<p class="error">Error: {{.Job.Error}}</p>{{end}}
   <div class="actions">
+    <a class="btn primary" href="/api/scans/{{.Job.ID}}/export?format=pdf">Download PDF report</a>
     <a class="btn" href="/api/scans/{{.Job.ID}}/export?format=json">Export JSON</a>
     <a class="btn" href="/api/scans/{{.Job.ID}}/export?format=sarif">Export SARIF</a>
     {{if or (eq .Job.Status "queued") (eq .Job.Status "fetching") (eq .Job.Status "scanning")}}

@@ -64,6 +64,7 @@ button, .btn {
 }
 button:hover, .btn:hover { filter: brightness(1.08); text-decoration: none; }
 .btn { background: var(--card-2); border: 1px solid var(--line); color: var(--fg); }
+.btn.primary { background: var(--accent); border-color: transparent; color: #fff; }
 .btn.danger { background: transparent; border-color: var(--critical); color: var(--critical); }
 .hint { color: var(--muted); font-size: 12px; margin: 0; }
 .actions { display: flex; align-items: center; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
@@ -74,6 +75,16 @@ th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--lin
 th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
 .scans td, .findings td { font-size: 13.5px; }
 .table-scroll { overflow-x: auto; }
+
+/* Findings table: fixed layout with explicit column widths so long CVE text
+   wraps into the DETAIL column instead of stretching the row / leaving gaps. */
+.findings { table-layout: fixed; }
+.findings th, .findings td { word-break: break-word; overflow-wrap: anywhere; }
+.findings th:nth-child(1), .findings td:nth-child(1) { width: 64px; }   /* Sev */
+.findings th:nth-child(2), .findings td:nth-child(2) { width: 78px; }   /* Category */
+.findings th:nth-child(3), .findings td:nth-child(3) { width: 160px; }  /* Rule */
+.findings th:nth-child(4), .findings td:nth-child(4) { width: 26%; }    /* Location */
+/* DETAIL (5th) takes the remaining width. */
 
 .badge {
   display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 12px;

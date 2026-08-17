@@ -39,8 +39,18 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 	case "sarif":
 		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="codescan-%s.sarif"`, id))
 		writeJSON(w, http.StatusOK, toSARIF(findings))
+	case "pdf":
+		data, err := buildPDF(job, findings)
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, "could not build PDF report")
+			return
+		}
+		w.Header().Set("Content-Type", "application/pdf")
+		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="codescan-%s.pdf"`, id))
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(data)
 	default:
-		writeErr(w, http.StatusBadRequest, "format must be json or sarif")
+		writeErr(w, http.StatusBadRequest, "format must be json, sarif, or pdf")
 	}
 }
 
