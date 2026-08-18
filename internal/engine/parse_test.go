@@ -86,6 +86,38 @@ func TestParseTrivy(t *testing.T) {
 	}
 }
 
+func TestParseTrivyRelationship(t *testing.T) {
+	data := []byte(`{
+	  "Results": [
+	    {"Target":"package-lock.json","Class":"lang-pkgs","Type":"npm",
+	     "Packages":[
+	       {"ID":"tar@6.1.0","Name":"tar","Version":"6.1.0","Relationship":"direct"},
+	       {"ID":"minimist@1.2.0","Name":"minimist","Version":"1.2.0","Relationship":"indirect"}],
+	     "Vulnerabilities":[
+	       {"VulnerabilityID":"CVE-A","PkgID":"tar@6.1.0","PkgName":"tar","InstalledVersion":"6.1.0","Severity":"HIGH"},
+	       {"VulnerabilityID":"CVE-B","PkgID":"minimist@1.2.0","PkgName":"minimist","InstalledVersion":"1.2.0","Severity":"MEDIUM"},
+	       {"VulnerabilityID":"CVE-C","PkgName":"orphan","InstalledVersion":"9.9","Severity":"LOW"}]}
+	  ]
+	}`)
+	fs, err := parseTrivy(data, "/work")
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	rel := map[string]string{}
+	for _, f := range fs {
+		rel[f.CVE] = f.Relationship
+	}
+	if rel["CVE-A"] != "direct" {
+		t.Errorf("tar should be direct, got %q", rel["CVE-A"])
+	}
+	if rel["CVE-B"] != "indirect" {
+		t.Errorf("minimist should be indirect, got %q", rel["CVE-B"])
+	}
+	if rel["CVE-C"] != "" {
+		t.Errorf("orphan pkg (no Packages entry) should have empty relationship, got %q", rel["CVE-C"])
+	}
+}
+
 func TestNormSeverity(t *testing.T) {
 	cases := map[string]string{
 		"CRITICAL": "critical", "HIGH": "high", "ERROR": "high",

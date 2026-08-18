@@ -50,10 +50,19 @@ func (e *TrivyFS) Scan(ctx context.Context, dir string) ([]store.Finding, error)
 // trivyReport is the subset of `trivy fs --format json` we consume.
 type trivyReport struct {
 	Results []struct {
-		Target          string `json:"Target"`
-		Class           string `json:"Class"`
+		Target string `json:"Target"`
+		Class  string `json:"Class"`
+		// Packages carries the dependency graph metadata; Relationship tells us
+		// whether a package is a direct dependency or pulled in transitively.
+		Packages []struct {
+			ID           string `json:"ID"`
+			Name         string `json:"Name"`
+			Version      string `json:"Version"`
+			Relationship string `json:"Relationship"` // direct | indirect | root | workspace | ...
+		} `json:"Packages"`
 		Vulnerabilities []struct {
 			VulnerabilityID  string `json:"VulnerabilityID"`
+			PkgID            string `json:"PkgID"`
 			PkgName          string `json:"PkgName"`
 			InstalledVersion string `json:"InstalledVersion"`
 			FixedVersion     string `json:"FixedVersion"`
@@ -96,19 +105,40 @@ func parseTrivy(data []byte, dir string) ([]store.Finding, error) {
 	for _, res := range rep.Results {
 		target := relPath(dir, res.Target)
 
+		// Build a package -> direct/indirect map for this result. Key by PkgID
+		// (e.g. "tar@6.1.0") and by name@version as a fallback.
+		rel := make(map[string]string, len(res.Packages))
+		for _, p := range res.Packages {
+			r := normRelationship(p.Relationship)
+			if r == "" {
+				continue
+			}
+			if p.ID != "" {
+				rel[p.ID] = r
+			}
+			if p.Name != "" && p.Version != "" {
+				rel[p.Name+"@"+p.Version] = r
+			}
+		}
+
 		for _, v := range res.Vulnerabilities {
+			r := rel[v.PkgID]
+			if r == "" {
+				r = rel[v.PkgName+"@"+v.InstalledVersion]
+			}
 			out = append(out, store.Finding{
-				Tool:     "trivy",
-				Category: "sca",
-				Severity: normSeverity(v.Severity),
-				RuleID:   v.VulnerabilityID,
-				CVE:      v.VulnerabilityID,
-				Title:    firstNonEmpty(v.Title, v.VulnerabilityID),
-				Message:  strings.TrimSpace(v.Description),
-				FilePath: target,
-				PkgName:  v.PkgName,
-				PkgVer:   v.InstalledVersion,
-				FixedVer: v.FixedVersion,
+				Tool:         "trivy",
+				Category:     "sca",
+				Severity:     normSeverity(v.Severity),
+				RuleID:       v.VulnerabilityID,
+				CVE:          v.VulnerabilityID,
+				Title:        firstNonEmpty(v.Title, v.VulnerabilityID),
+				Message:      strings.TrimSpace(v.Description),
+				FilePath:     target,
+				PkgName:      v.PkgName,
+				PkgVer:       v.InstalledVersion,
+				FixedVer:     v.FixedVersion,
+				Relationship: r,
 			})
 		}
 		for _, s := range res.Secrets {
@@ -152,6 +182,19 @@ func parseTrivy(data []byte, dir string) ([]store.Finding, error) {
 		}
 	}
 	return out, nil
+}
+
+// normRelationship maps Trivy's Relationship enum to codescan's direct/indirect.
+// root and workspace packages are top-level, so treat them as direct.
+func normRelationship(r string) string {
+	switch strings.ToLower(strings.TrimSpace(r)) {
+	case "direct", "root", "workspace":
+		return "direct"
+	case "indirect":
+		return "indirect"
+	default:
+		return ""
+	}
 }
 
 func firstNonEmpty(vals ...string) string {

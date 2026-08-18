@@ -55,21 +55,22 @@ type Job struct {
 
 // Finding is a normalized result row.
 type Finding struct {
-	ID       int64  `json:"id"`
-	JobID    string `json:"job_id"`
-	Tool     string `json:"tool"`
-	Category string `json:"category"`
-	Severity string `json:"severity"`
-	RuleID   string `json:"rule_id,omitempty"`
-	Title    string `json:"title,omitempty"`
-	Message  string `json:"message,omitempty"`
-	FilePath string `json:"file_path,omitempty"`
-	Line     int    `json:"line,omitempty"`
-	PkgName  string `json:"pkg_name,omitempty"`
-	PkgVer   string `json:"pkg_ver,omitempty"`
-	FixedVer string `json:"fixed_ver,omitempty"`
-	CVE      string `json:"cve,omitempty"`
-	Raw      string `json:"raw,omitempty"`
+	ID           int64  `json:"id"`
+	JobID        string `json:"job_id"`
+	Tool         string `json:"tool"`
+	Category     string `json:"category"`
+	Severity     string `json:"severity"`
+	RuleID       string `json:"rule_id,omitempty"`
+	Title        string `json:"title,omitempty"`
+	Message      string `json:"message,omitempty"`
+	FilePath     string `json:"file_path,omitempty"`
+	Line         int    `json:"line,omitempty"`
+	PkgName      string `json:"pkg_name,omitempty"`
+	PkgVer       string `json:"pkg_ver,omitempty"`
+	FixedVer     string `json:"fixed_ver,omitempty"`
+	CVE          string `json:"cve,omitempty"`
+	Relationship string `json:"relationship,omitempty"` // SCA: direct | indirect
+	Raw          string `json:"raw,omitempty"`
 }
 
 func now() int64 { return time.Now().Unix() }
@@ -288,8 +289,8 @@ func (s *Store) InsertFindings(ctx context.Context, fs []Finding) error {
 
 	stmt, err := tx.PrepareContext(ctx,
 		`INSERT INTO findings (job_id, tool, category, severity, rule_id, title,
-		    message, file_path, line, pkg_name, pkg_ver, fixed_ver, cve, raw)
-		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+		    message, file_path, line, pkg_name, pkg_ver, fixed_ver, cve, relationship, raw)
+		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
 	if err != nil {
 		return fmt.Errorf("prepare: %w", err)
 	}
@@ -299,7 +300,7 @@ func (s *Store) InsertFindings(ctx context.Context, fs []Finding) error {
 		f := &fs[i]
 		if _, err := stmt.ExecContext(ctx, f.JobID, f.Tool, f.Category, f.Severity,
 			f.RuleID, f.Title, f.Message, f.FilePath, f.Line, f.PkgName, f.PkgVer,
-			f.FixedVer, f.CVE, f.Raw); err != nil {
+			f.FixedVer, f.CVE, f.Relationship, f.Raw); err != nil {
 			return fmt.Errorf("insert finding: %w", err)
 		}
 	}
@@ -333,7 +334,7 @@ func (s *Store) ListFindings(ctx context.Context, jobID string, f FindingFilter)
 	}
 
 	query := `SELECT id, job_id, tool, category, severity, rule_id, title, message,
-	                 file_path, line, pkg_name, pkg_ver, fixed_ver, cve, raw
+	                 file_path, line, pkg_name, pkg_ver, fixed_ver, cve, relationship, raw
 	          FROM findings WHERE ` + strings.Join(conds, " AND ") +
 		` ORDER BY CASE severity
 		     WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2
@@ -350,18 +351,18 @@ func (s *Store) ListFindings(ctx context.Context, jobID string, f FindingFilter)
 		var (
 			f                                                   Finding
 			ruleID, title, msg, file, pkgName, pkgVer, fixedVer sql.NullString
-			cve, raw                                            sql.NullString
+			cve, relationship, raw                              sql.NullString
 			line                                                sql.NullInt64
 		)
 		if err := rows.Scan(&f.ID, &f.JobID, &f.Tool, &f.Category, &f.Severity,
 			&ruleID, &title, &msg, &file, &line, &pkgName, &pkgVer, &fixedVer,
-			&cve, &raw); err != nil {
+			&cve, &relationship, &raw); err != nil {
 			return nil, err
 		}
 		f.RuleID, f.Title, f.Message, f.FilePath = ruleID.String, title.String, msg.String, file.String
 		f.Line = int(line.Int64)
 		f.PkgName, f.PkgVer, f.FixedVer = pkgName.String, pkgVer.String, fixedVer.String
-		f.CVE, f.Raw = cve.String, raw.String
+		f.CVE, f.Relationship, f.Raw = cve.String, relationship.String, raw.String
 		out = append(out, f)
 	}
 	return out, rows.Err()

@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS findings (
   pkg_ver   TEXT,
   fixed_ver TEXT,                        -- version that fixes the issue
   cve       TEXT,
+  relationship TEXT,                     -- SCA: direct | indirect (dependency kind)
   raw       TEXT                         -- original JSON fragment, for export/trace
 );
 

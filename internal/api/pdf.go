@@ -159,6 +159,12 @@ func renderFinding(pdf *fpdf.Fpdf, f *store.Finding, o sevStyle) {
 		if f.PkgVer != "" {
 			loc += "@" + f.PkgVer
 		}
+		switch f.Relationship {
+		case "direct":
+			loc += "  (direct)"
+		case "indirect":
+			loc += "  (transitive)"
+		}
 		if f.FixedVer != "" {
 			loc += "  ->  fix " + f.FixedVer
 		}
