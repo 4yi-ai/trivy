@@ -37,7 +37,7 @@
       var body = { source_type: "git", source_ref: fd.get("source_ref") };
       var token = fd.get("token");
       if (token) body.token = token;
-      submitScan(JSON.stringify(body), { "Content-Type": "application/json" });
+      submitScan({ button: submitBtn(gitForm), body: JSON.stringify(body), contentType: "application/json" });
     });
   }
 
@@ -46,22 +46,55 @@
   if (zipForm) {
     zipForm.addEventListener("submit", function (e) {
       e.preventDefault();
-      submitScan(new FormData(zipForm), null);
+      submitScan({ button: submitBtn(zipForm), body: new FormData(zipForm), isUpload: true });
     });
   }
 
-  function submitScan(body, headers) {
-    var opts = { method: "POST", body: body };
-    if (headers) opts.headers = headers;
-    fetch("/api/scans", opts)
-      .then(function (r) {
-        return r.json().then(function (data) { return { ok: r.ok, data: data }; });
-      })
-      .then(function (res) {
-        if (!res.ok) { showError(res.data.error || "scan failed to start"); return; }
-        window.location.href = "/scans/" + res.data.id;
-      })
-      .catch(function () { showError("network error"); });
+  function submitBtn(form) {
+    return form.querySelector("button[type=submit]") || form.querySelector("button");
+  }
+
+  function hideError() {
+    var box = document.getElementById("form-error");
+    if (box) box.classList.add("hidden");
+  }
+
+  // submitScan POSTs the scan and gives the user feedback the whole time: it
+  // disables the button, shows upload progress % for archives (via XHR, which —
+  // unlike fetch — exposes upload progress), then redirects to the scan page on
+  // success. Without this, a big upload looked like nothing was happening.
+  function submitScan(opts) {
+    var btn = opts.button;
+    var original = btn ? btn.textContent : "";
+    if (btn) { btn.disabled = true; btn.textContent = opts.isUpload ? "Uploading… 0%" : "Starting…"; }
+    hideError();
+
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/scans");
+    if (opts.contentType) xhr.setRequestHeader("Content-Type", opts.contentType);
+
+    if (opts.isUpload && xhr.upload) {
+      xhr.upload.onprogress = function (e) {
+        if (!btn || !e.lengthComputable) return;
+        var pct = Math.round((e.loaded / e.total) * 100);
+        btn.textContent = pct < 100 ? "Uploading… " + pct + "%" : "Processing…";
+      };
+    }
+    xhr.onload = function () {
+      var data = {};
+      try { data = JSON.parse(xhr.responseText); } catch (err) { /* non-JSON */ }
+      if (xhr.status >= 200 && xhr.status < 300 && data.id) {
+        window.location.href = "/scans/" + data.id;
+        return;
+      }
+      if (btn) { btn.disabled = false; btn.textContent = original; }
+      showError((data && data.error) || ("scan failed to start (HTTP " + xhr.status + ")"));
+    };
+    xhr.onerror = function () {
+      if (btn) { btn.disabled = false; btn.textContent = original; }
+      showError("network error — the upload was interrupted, please retry");
+    };
+    xhr.send(opts.body);
   }
 
   // ---- detail page: live polling ----
