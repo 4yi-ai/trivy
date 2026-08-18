@@ -17,12 +17,13 @@
     {{else}}<p class="error">Error: {{.Job.Error}}</p>{{end}}
   {{end}}
   <div class="actions">
-    <a class="btn primary" href="/api/scans/{{.Job.ID}}/export?format=pdf">Download PDF report</a>
-    <a class="btn" href="/api/scans/{{.Job.ID}}/export?format=json">Export JSON</a>
-    <a class="btn" href="/api/scans/{{.Job.ID}}/export?format=sarif">Export SARIF</a>
     {{if or (eq .Job.Status "queued") (eq .Job.Status "fetching") (eq .Job.Status "scanning")}}
     <button class="btn danger" id="cancel-btn">Cancel</button>
     <span class="muted small" id="live-note">live — updating…</span>
+    {{else}}
+    <a class="btn primary" href="/api/scans/{{.Job.ID}}/export?format=pdf">Download PDF report</a>
+    <a class="btn" href="/api/scans/{{.Job.ID}}/export?format=json">Export JSON</a>
+    <a class="btn" href="/api/scans/{{.Job.ID}}/export?format=sarif">Export SARIF</a>
     {{end}}
   </div>
 </section>
