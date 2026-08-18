@@ -9,8 +9,8 @@ import (
 	"github.com/4yi-ai/codescan/internal/store"
 )
 
-// TrivyFS runs `trivy fs` with the vuln, secret, misconfig and license scanners
-// in one pass. The vulnerability DB is cached on the persistent volume via
+// TrivyFS runs `trivy fs` with the vuln, secret and misconfig scanners in one
+// pass (license scanning is off — see Scan). The vulnerability DB is cached via
 // TRIVY_CACHE_DIR (set in the environment), so it is not re-downloaded per scan.
 type TrivyFS struct{}
 
@@ -24,7 +24,11 @@ func (e *TrivyFS) Available() bool { return available("trivy") }
 func (e *TrivyFS) Scan(ctx context.Context, dir string) ([]store.Finding, error) {
 	args := []string{
 		"fs",
-		"--scanners", "vuln,secret,misconfig,license",
+		// license scanning is intentionally OFF: it emits one finding per
+		// dependency license (mostly MIT/ISC/etc. — compliance info, not security)
+		// and on a real project drowns out the actual vulnerabilities. Security
+		// scanners only. (Re-add "license" here if a compliance view is wanted.)
+		"--scanners", "vuln,secret,misconfig",
 		"--format", "json",
 		"--quiet",
 		"--no-progress",

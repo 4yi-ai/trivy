@@ -75,6 +75,32 @@ func TestRunnerResilientToEngineFailure(t *testing.T) {
 	}
 }
 
+// TestDedupe verifies the dual-lockfile / cross-project dedup behavior.
+func TestDedupe(t *testing.T) {
+	in := []store.Finding{
+		// same CVE+pkg+ver in the SAME dir via two lockfiles -> 1
+		{Category: "sca", RuleID: "CVE-1", PkgName: "tar", PkgVer: "1.0", FilePath: "view/pc/package-lock.json"},
+		{Category: "sca", RuleID: "CVE-1", PkgName: "tar", PkgVer: "1.0", FilePath: "view/pc/yarn.lock"},
+		// same pkg but DIFFERENT sub-project dir -> kept separate
+		{Category: "sca", RuleID: "CVE-1", PkgName: "tar", PkgVer: "1.0", FilePath: "view/admin/yarn.lock"},
+		// different version -> kept
+		{Category: "sca", RuleID: "CVE-1", PkgName: "tar", PkgVer: "2.0", FilePath: "view/pc/yarn.lock"},
+		// SAST: unique by rule+file+line
+		{Category: "sast", RuleID: "xss", FilePath: "a.js", Line: 10},
+		{Category: "sast", RuleID: "xss", FilePath: "a.js", Line: 10}, // dup -> collapsed
+		{Category: "sast", RuleID: "xss", FilePath: "a.js", Line: 11}, // different line -> kept
+	}
+	got := dedupe(in)
+	// expect: 1 (pc tar 1.0) + 1 (admin tar 1.0) + 1 (pc tar 2.0) + 1 (xss:10) + 1 (xss:11) = 5
+	if len(got) != 5 {
+		t.Fatalf("dedupe returned %d findings, want 5: %+v", len(got), got)
+	}
+	// input must not be mutated destructively in a way that loses data
+	if len(in) != 7 {
+		t.Errorf("input length changed to %d, want 7", len(in))
+	}
+}
+
 // TestRunnerAllEnginesFail: when every engine fails, the scan fails.
 func TestRunnerAllEnginesFail(t *testing.T) {
 	st := openStore(t)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/4yi-ai/codescan/internal/source"
@@ -81,6 +82,7 @@ func (r *realRunner) Run(ctx context.Context, job *store.Job, sec Secret) error 
 	}
 
 	// ---- persist ----
+	all = dedupe(all)
 	if err := r.store.InsertFindings(ctx, all); err != nil {
 		return err
 	}
@@ -115,6 +117,43 @@ func (r *realRunner) fetch(ctx context.Context, job *store.Job, sec Secret, srcD
 	default:
 		return fmt.Errorf("unknown source type %q", job.SourceType)
 	}
+}
+
+// dedupe collapses redundant findings while preserving distinct ones:
+//   - dependency findings (have a package) are keyed by CVE+package+version and
+//     the containing DIRECTORY, so the same dep listed in two lockfiles side by
+//     side (e.g. package-lock.json + yarn.lock) counts once, while the same
+//     package in a different sub-project stays separate.
+//   - code/secret/IaC findings are keyed by rule + exact file:line.
+//
+// It keeps the first occurrence and preserves order.
+func dedupe(fs []store.Finding) []store.Finding {
+	seen := make(map[string]struct{}, len(fs))
+	out := fs[:0:0] // new backing array, don't mutate the input
+	for _, f := range fs {
+		var key string
+		if f.PkgName != "" {
+			key = "pkg\x00" + f.Category + "\x00" + f.RuleID + "\x00" +
+				f.PkgName + "\x00" + f.PkgVer + "\x00" + dirOf(f.FilePath)
+		} else {
+			key = "code\x00" + f.Category + "\x00" + f.RuleID + "\x00" +
+				f.FilePath + "\x00" + strconv.Itoa(f.Line)
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, f)
+	}
+	return out
+}
+
+// dirOf returns the directory portion of a slash- or backslash-separated path.
+func dirOf(p string) string {
+	if i := strings.LastIndexAny(p, `/\`); i >= 0 {
+		return p[:i]
+	}
+	return ""
 }
 
 // summarize counts findings by severity.
