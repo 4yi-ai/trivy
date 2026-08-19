@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/go-pdf/fpdf"
@@ -13,20 +14,87 @@ import (
 // severity display order + colors for the PDF report.
 type sevStyle struct {
 	key     string
-	label   string
+	label   string // short tag shown on each finding (tiers mix severities)
 	r, g, b int
 }
 
 var pdfSeverities = []sevStyle{
-	{"critical", "CRITICAL", 220, 53, 69},
+	{"critical", "CRIT", 220, 53, 69},
 	{"high", "HIGH", 255, 140, 66},
-	{"medium", "MEDIUM", 214, 170, 30},
+	{"medium", "MED", 214, 170, 30},
 	{"low", "LOW", 90, 170, 210},
 	{"info", "INFO", 140, 140, 140},
 }
 
+// sevRank orders severities most-severe first; unknown sorts last.
+func sevRank(sev string) int {
+	for i, s := range pdfSeverities {
+		if s.key == strings.ToLower(sev) {
+			return i
+		}
+	}
+	return len(pdfSeverities)
+}
+
+func sevStyleOf(sev string) sevStyle {
+	for _, s := range pdfSeverities {
+		if s.key == strings.ToLower(sev) {
+			return s
+		}
+	}
+	return sevStyle{"info", "INFO", 140, 140, 140}
+}
+
+// priorityTier is a top-level report section. Findings are bucketed into these
+// (most-actionable first) instead of grouped by severity, so the code
+// vulnerabilities and the deps you can fix yourself aren't buried under
+// hundreds of transitive CVEs. Chosen ordering: type-based priority tiers.
+type priorityTier struct {
+	label    string
+	subtitle string
+	r, g, b  int
+}
+
+var priorityTiers = []priorityTier{
+	{"P1  CODE VULNERABILITIES (verified)",
+		"Business-logic bugs found by CodeScan's own rules (access-control/IDOR, SQL injection, SSRF). NOT dependency CVEs - fix these first.",
+		150, 32, 44},
+	{"P2  DIRECT DEPENDENCIES",
+		"Vulnerable packages you declared yourself - fix by bumping the version. Sorted by severity.",
+		56, 110, 200},
+	{"P3  CONFIG & SECRETS",
+		"IaC misconfig, exposed secrets, and generic code-hygiene findings. Review and remediate.",
+		200, 150, 40},
+	{"P4  TRANSITIVE DEPENDENCIES",
+		"Pulled in indirectly by other packages - usually fixed by bumping a parent dependency. Sorted by severity.",
+		140, 140, 140},
+}
+
+// isCustomRule reports whether a finding came from CodeScan's own hand-written
+// rules (rules/custom/*), i.e. the verified business-logic code vulnerabilities.
+func isCustomRule(f *store.Finding) bool {
+	return strings.HasPrefix(f.RuleID, "rules.custom.")
+}
+
+// tierOf buckets a finding into one of the 4 priority tiers (1-based).
+func tierOf(f *store.Finding) int {
+	cat := strings.ToLower(f.Category)
+	switch {
+	case cat == "sast" && isCustomRule(f):
+		return 1 // verified code vuln
+	case cat == "sca" && f.Relationship == "direct":
+		return 2 // direct dependency
+	case cat == "iac" || cat == "secret" || cat == "sast":
+		return 3 // config / secret / generic SAST hygiene
+	default:
+		return 4 // transitive / unclassified dependency
+	}
+}
+
 // buildPDF renders a human-readable security report for a scan. It uses a
 // pure-Go PDF library (no headless browser), so it works offline in the pod.
+// Layout: summary badges -> stats table (category x severity) -> findings in
+// type-based priority tiers (most actionable first).
 func buildPDF(job *store.Job, findings []store.Finding) ([]byte, error) {
 	pdf := fpdf.New("P", "mm", "A4", "")
 	pdf.SetMargins(15, 15, 15)
@@ -60,12 +128,6 @@ func buildPDF(job *store.Job, findings []store.Finding) ([]byte, error) {
 	drawSummary(pdf, sum, len(findings))
 	pdf.Ln(10)
 
-	// Priority box: pull CodeScan's own custom-rule findings (business-logic
-	// vulns the community pack misses — IDOR/authz, SQLi, SSRF) to the very top
-	// so the highest-value issues aren't buried under hundreds of dependency
-	// CVEs. Full detail still appears in the severity sections below.
-	drawPriority(pdf, findings)
-
 	if len(findings) == 0 {
 		pdf.SetFont("Helvetica", "", 11)
 		pdf.SetTextColor(60, 120, 80)
@@ -73,34 +135,41 @@ func buildPDF(job *store.Job, findings []store.Finding) ([]byte, error) {
 		return output(pdf)
 	}
 
-	// Group findings by severity.
-	groups := map[string][]store.Finding{}
+	// Stats table: category (SCA/SAST/IaC/Secret) x severity.
+	drawStatsTable(pdf, findings)
+	pdf.Ln(8)
+
+	// Bucket findings into priority tiers, each sorted by severity.
+	tiers := map[int][]store.Finding{}
 	for _, f := range findings {
-		k := strings.ToLower(f.Severity)
-		groups[k] = append(groups[k], f)
+		t := tierOf(&f)
+		tiers[t] = append(tiers[t], f)
+	}
+	for t := range tiers {
+		fs := tiers[t]
+		sort.SliceStable(fs, func(i, j int) bool {
+			return sevRank(fs[i].Severity) < sevRank(fs[j].Severity)
+		})
+		tiers[t] = fs
 	}
 
-	for _, o := range pdfSeverities {
-		fs := groups[o.key]
+	for i, tier := range priorityTiers {
+		fs := tiers[i+1]
 		if len(fs) == 0 {
 			continue
 		}
-		// Section header
-		pdf.SetFont("Helvetica", "B", 12)
-		pdf.SetTextColor(o.r, o.g, o.b)
-		pdf.Cell(0, 8, fmt.Sprintf("%s  (%d)", o.label, len(fs)))
-		pdf.Ln(9)
-		for i := range fs {
-			renderFinding(pdf, &fs[i], o)
+		drawTierHeader(pdf, tier, len(fs))
+		for j := range fs {
+			renderFinding(pdf, &fs[j])
 		}
-		pdf.Ln(3)
+		pdf.Ln(4)
 	}
 
 	// Footer note on the last page.
 	pdf.SetFont("Helvetica", "I", 8)
 	pdf.SetTextColor(150, 150, 150)
 	pdf.Ln(2)
-	pdf.Cell(0, 5, "Generated by CodeScan - Semgrep (SAST) + Trivy (SCA/secret/IaC/license). No LLM, zero tokens.")
+	pdf.Cell(0, 5, "Generated by CodeScan - Semgrep (SAST) + Trivy (SCA/secret/IaC). No LLM, zero tokens.")
 
 	return output(pdf)
 }
@@ -139,97 +208,99 @@ func drawSummary(pdf *fpdf.Fpdf, s *store.Summary, total int) {
 	pdf.CellFormat(0, 7, fmt.Sprintf("  %d total", total), "", 0, "L", false, 0, "")
 }
 
-// priorityClass groups CodeScan's custom-rule findings (rules.custom.*) into a
-// small set of high-value vulnerability classes, shown in the top PRIORITY box.
-// match is a substring of the custom rule id; order = how urgently to look.
-type priorityClass struct {
-	match   string
-	label   string
-	r, g, b int
-}
+// drawStatsTable renders a category x severity count matrix so the reader sees
+// the shape of the report (how many SCA vs SAST vs IaC, at each severity) before
+// the detail.
+func drawStatsTable(pdf *fpdf.Fpdf, findings []store.Finding) {
+	// rows in display order; only shown if they have any findings.
+	rows := []struct{ key, label string }{
+		{"sca", "SCA  (dependencies)"},
+		{"sast", "SAST  (code)"},
+		{"iac", "IaC  (config)"},
+		{"secret", "Secret"},
+	}
+	// counts[category][severityKey]
+	counts := map[string]map[string]int{}
+	for _, f := range findings {
+		cat := strings.ToLower(f.Category)
+		if counts[cat] == nil {
+			counts[cat] = map[string]int{}
+		}
+		counts[cat][strings.ToLower(f.Severity)]++
+	}
 
-var priorityClasses = []priorityClass{
-	{"idor", "BROKEN ACCESS CONTROL / IDOR", 176, 42, 55},
-	{"sqli", "SQL INJECTION (order-by)", 200, 60, 40},
-	{"ssrf", "SSRF (outbound fetch)", 205, 110, 30},
-}
+	const (
+		wLabel = 55.0
+		wCell  = 21.0
+	)
+	sevCols := []sevStyle{
+		{"critical", "Critical", 220, 53, 69},
+		{"high", "High", 255, 140, 66},
+		{"medium", "Medium", 214, 170, 30},
+		{"low", "Low", 90, 170, 210},
+		{"info", "Info", 140, 140, 140},
+	}
 
-// isCustomRule reports whether a finding came from CodeScan's own hand-written
-// rules (rules/custom/*), i.e. the verified business-logic classes we surface.
-func isCustomRule(f *store.Finding) bool {
-	return strings.HasPrefix(f.RuleID, "rules.custom.")
-}
+	// Header row.
+	pdf.SetFont("Helvetica", "B", 8.5)
+	pdf.SetFillColor(238, 240, 243)
+	pdf.SetTextColor(70, 74, 82)
+	pdf.CellFormat(wLabel, 6.5, " Category", "", 0, "L", true, 0, "")
+	for _, c := range sevCols {
+		pdf.CellFormat(wCell, 6.5, c.label, "", 0, "C", true, 0, "")
+	}
+	pdf.CellFormat(wCell, 6.5, "Total", "", 1, "C", true, 0, "")
 
-// drawPriority renders a highlighted box at the top of the report listing the
-// custom-rule findings first, grouped by class, so the reader sees the
-// highest-value issues before the long dependency list. No-op when there are
-// none. Note: some classes are review-tier (no taint tracking), so the box says
-// "review" rather than asserting every hit is exploitable.
-func drawPriority(pdf *fpdf.Fpdf, findings []store.Finding) {
-	byClass := map[string][]store.Finding{}
-	total := 0
-	for i := range findings {
-		f := &findings[i]
-		if !isCustomRule(f) {
+	// Data rows.
+	pdf.SetFont("Helvetica", "", 8.5)
+	for _, r := range rows {
+		cc := counts[r.key]
+		if cc == nil {
 			continue
 		}
-		for _, c := range priorityClasses {
-			if strings.Contains(f.RuleID, c.match) {
-				byClass[c.match] = append(byClass[c.match], *f)
-				total++
-				break
+		rowTotal := 0
+		pdf.SetTextColor(45, 48, 55)
+		pdf.SetFont("Helvetica", "B", 8.5)
+		pdf.CellFormat(wLabel, 6, " "+r.label, "B", 0, "L", false, 0, "")
+		pdf.SetFont("Helvetica", "", 8.5)
+		for _, c := range sevCols {
+			n := cc[c.key]
+			rowTotal += n
+			if n > 0 {
+				pdf.SetTextColor(c.r, c.g, c.b)
+				pdf.SetFont("Helvetica", "B", 8.5)
+			} else {
+				pdf.SetTextColor(190, 193, 198)
+				pdf.SetFont("Helvetica", "", 8.5)
 			}
+			pdf.CellFormat(wCell, 6, cell(n), "B", 0, "C", false, 0, "")
 		}
+		pdf.SetTextColor(45, 48, 55)
+		pdf.SetFont("Helvetica", "B", 8.5)
+		pdf.CellFormat(wCell, 6, cell(rowTotal), "B", 1, "C", false, 0, "")
 	}
-	if total == 0 {
-		return
-	}
+}
 
-	// Banner.
-	pdf.SetFillColor(150, 32, 44)
+func cell(n int) string {
+	if n == 0 {
+		return "-"
+	}
+	return fmt.Sprintf("%d", n)
+}
+
+// drawTierHeader draws a colored banner + subtitle for a priority tier.
+func drawTierHeader(pdf *fpdf.Fpdf, t priorityTier, n int) {
+	pdf.SetFillColor(t.r, t.g, t.b)
 	pdf.SetTextColor(255, 255, 255)
 	pdf.SetFont("Helvetica", "B", 11)
-	pdf.CellFormat(0, 8, pdfSafe(fmt.Sprintf("  PRIORITY - CODE VULNERABILITIES  (%d)", total)),
-		"", 1, "L", true, 0, "")
+	pdf.CellFormat(0, 8, pdfSafe(fmt.Sprintf("  %s  (%d)", t.label, n)), "", 1, "L", true, 0, "")
 	pdf.SetFont("Helvetica", "", 8)
 	pdf.SetTextColor(90, 96, 105)
-	pdf.MultiCell(0, 4, pdfSafe("Business-logic issues found by CodeScan's own rules (NOT dependency CVEs) - "+
-		"the highest-value findings, easy to miss below. Fix the access-control and SQL-injection items first; "+
-		"SSRF/order-by are review-tier. Each is listed in full in the severity sections below."),
-		"", "L", false)
-	pdf.Ln(2)
-
-	for _, c := range priorityClasses {
-		fs := byClass[c.match]
-		if len(fs) == 0 {
-			continue
-		}
-		// Class row: colored keyline + filled pill (label) + count.
-		y := pdf.GetY()
-		pdf.SetFillColor(c.r, c.g, c.b)
-		pdf.Rect(15, y, 1.2, 4.4, "F")
-		pdf.SetX(18)
-		depPill(pdf, c.label, c.r, c.g, c.b, true)
-		pdf.SetFont("Helvetica", "B", 8)
-		pdf.SetTextColor(70, 74, 82)
-		pdf.CellFormat(0, 4.4, pdfSafe(fmt.Sprintf("  x %d", len(fs))), "", 1, "L", false, 0, "")
-		// One compact location line per hit.
-		pdf.SetFont("Helvetica", "", 7.5)
-		pdf.SetTextColor(110, 115, 125)
-		for i := range fs {
-			loc := fs[i].FilePath
-			if fs[i].Line > 0 {
-				loc += fmt.Sprintf(":%d", fs[i].Line)
-			}
-			pdf.SetX(20)
-			pdf.MultiCell(0, 3.6, pdfSafe(loc), "", "L", false)
-		}
-		pdf.Ln(1.5)
-	}
-	pdf.Ln(4)
+	pdf.MultiCell(0, 4, pdfSafe(t.subtitle), "", "L", false)
+	pdf.Ln(1.5)
 }
 
-// depPill draws a small inline tag (used for DIRECT / transitive). It advances
+// depPill draws a small inline tag (severity / DIRECT / transitive). It advances
 // the cursor on the same line so the finding title can follow.
 func depPill(pdf *fpdf.Fpdf, label string, r, g, b int, filled bool) {
 	pdf.SetFont("Helvetica", "B", 6.5)
@@ -246,27 +317,29 @@ func depPill(pdf *fpdf.Fpdf, label string, r, g, b int, filled bool) {
 	pdf.CellFormat(1.5, 4.4, "", "", 0, "L", false, 0, "")
 }
 
-func renderFinding(pdf *fpdf.Fpdf, f *store.Finding, o sevStyle) {
+func renderFinding(pdf *fpdf.Fpdf, f *store.Finding) {
+	o := sevStyleOf(f.Severity)
+
 	// Colored left keyline for the severity.
 	y := pdf.GetY()
 	pdf.SetFillColor(o.r, o.g, o.b)
 	pdf.Rect(15, y, 1.2, 4, "F")
 
-	// Header: [DIRECT] badge + [category] rule / CVE. Direct dependencies (the
-	// ones the user can fix themselves) get a bright, filled tag so they pop.
+	// Header line: severity pill + DIRECT/transitive pill + [category] rule/CVE.
 	rule := f.RuleID
 	if rule == "" {
 		rule = f.Title
 	}
 	pdf.SetX(18)
+	depPill(pdf, o.label, o.r, o.g, o.b, true) // severity tag (tiers mix severities)
 	switch f.Relationship {
 	case "direct":
-		depPill(pdf, "DIRECT", 56, 132, 255, true) // bright blue, filled
+		depPill(pdf, "DIRECT", 56, 132, 255, true)
 		if f.Usage == "unused_suspected" {
-			depPill(pdf, "unused?", 190, 150, 40, false) // muted amber
+			depPill(pdf, "unused?", 190, 150, 40, false)
 		}
 	case "indirect":
-		depPill(pdf, "transitive", 150, 150, 150, false) // muted, low-key
+		depPill(pdf, "transitive", 150, 150, 150, false)
 	}
 	pdf.SetFont("Helvetica", "B", 9)
 	pdf.SetTextColor(35, 38, 45)

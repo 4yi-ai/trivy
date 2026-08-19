@@ -41,8 +41,8 @@ func TestBuildPDFPriority(t *testing.T) {
 			Message: "Business-logic issue found by a CodeScan custom rule.",
 		})
 	}
-	// A pile of SCA highs to simulate the noise the priority box rises above.
-	for i := 0; i < 40; i++ {
+	// P2: direct-dependency highs (fixable by the user).
+	for i := 0; i < 8; i++ {
 		findings = append(findings, store.Finding{
 			Tool: "trivy", Category: "sca", Severity: "high",
 			RuleID: "CVE-2026-4448" + string(rune('0'+i%10)),
@@ -57,6 +57,26 @@ func TestBuildPDFPriority(t *testing.T) {
 		FilePath: "view/admin/package-lock.json", PkgName: "swiper", PkgVer: "11.2.10",
 		FixedVer: "12.1.2", Relationship: "direct", Usage: "used", Message: "Swiper ... RCE.",
 	})
+	// P3: config + secret + generic SAST.
+	findings = append(findings,
+		store.Finding{Tool: "trivy", Category: "iac", Severity: "medium", RuleID: "DS-0002",
+			Title: "missing USER", FilePath: "tigshop-api/Dockerfile", Message: "Specify a non-root USER."},
+		store.Finding{Tool: "trivy", Category: "secret", Severity: "high", RuleID: "generic-secret",
+			Title: "Generic Secret detected", FilePath: "tigshop-api/src/main/resources/application.yaml", Line: 224},
+		store.Finding{Tool: "semgrep", Category: "sast", Severity: "info",
+			RuleID: "rules.registry.python.lang.best-practice.arbitrary-sleep",
+			Title:  "arbitrary-sleep", FilePath: "database/scripts/x.py", Line: 56, Message: "time.sleep() call."},
+	)
+	// P4: transitive dependencies.
+	for i := 0; i < 6; i++ {
+		findings = append(findings, store.Finding{
+			Tool: "trivy", Category: "sca", Severity: "high",
+			RuleID: "CVE-2026-2790" + string(rune('0'+i%10)),
+			Title:  "minimatch ReDoS", FilePath: "view/Tigshop-o2o-Pc/package-lock.json",
+			PkgName: "minimatch", PkgVer: "3.1.2", FixedVer: "10.2.3", Relationship: "indirect",
+			Message: "minimatch ReDoS via crafted glob ...",
+		})
+	}
 
 	pdf, err := buildPDF(job, findings)
 	if err != nil {
