@@ -116,5 +116,5 @@ th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: upp
 
 /* Dependency-kind badges on SCA findings. */
 .dep { display: inline-block; padding: 0 6px; border-radius: 5px; font-size: 10.5px; font-weight: 600; vertical-align: middle; }
-.dep-direct { background: rgba(79,140,255,.18); color: var(--accent); border: 1px solid rgba(79,140,255,.4); }
+.dep-direct { background: #3884ff; color: #fff; border: 1px solid #3884ff; letter-spacing: .02em; }
 .dep-indirect { background: transparent; color: var(--muted); border: 1px solid var(--line); }

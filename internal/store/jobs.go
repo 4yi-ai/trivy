@@ -338,7 +338,9 @@ func (s *Store) ListFindings(ctx context.Context, jobID string, f FindingFilter)
 	          FROM findings WHERE ` + strings.Join(conds, " AND ") +
 		` ORDER BY CASE severity
 		     WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2
-		     WHEN 'low' THEN 3 ELSE 4 END, file_path, line, id`
+		     WHEN 'low' THEN 3 ELSE 4 END,
+		   CASE WHEN relationship = 'direct' THEN 0 ELSE 1 END,
+		   file_path, line, id`
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {

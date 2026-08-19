@@ -133,18 +133,42 @@ func drawSummary(pdf *fpdf.Fpdf, s *store.Summary, total int) {
 	pdf.CellFormat(0, 7, fmt.Sprintf("  %d total", total), "", 0, "L", false, 0, "")
 }
 
+// depPill draws a small inline tag (used for DIRECT / transitive). It advances
+// the cursor on the same line so the finding title can follow.
+func depPill(pdf *fpdf.Fpdf, label string, r, g, b int, filled bool) {
+	pdf.SetFont("Helvetica", "B", 6.5)
+	txt := " " + label + " "
+	w := pdf.GetStringWidth(txt) + 1.5
+	if filled {
+		pdf.SetFillColor(r, g, b)
+		pdf.SetTextColor(255, 255, 255)
+		pdf.CellFormat(w, 4.4, txt, "", 0, "C", true, 0, "")
+	} else {
+		pdf.SetTextColor(r, g, b)
+		pdf.CellFormat(w, 4.4, txt, "", 0, "C", false, 0, "")
+	}
+	pdf.CellFormat(1.5, 4.4, "", "", 0, "L", false, 0, "")
+}
+
 func renderFinding(pdf *fpdf.Fpdf, f *store.Finding, o sevStyle) {
 	// Colored left keyline for the severity.
 	y := pdf.GetY()
 	pdf.SetFillColor(o.r, o.g, o.b)
 	pdf.Rect(15, y, 1.2, 4, "F")
 
-	// Header: [category] rule / CVE
+	// Header: [DIRECT] badge + [category] rule / CVE. Direct dependencies (the
+	// ones the user can fix themselves) get a bright, filled tag so they pop.
 	rule := f.RuleID
 	if rule == "" {
 		rule = f.Title
 	}
 	pdf.SetX(18)
+	switch f.Relationship {
+	case "direct":
+		depPill(pdf, "DIRECT", 56, 132, 255, true) // bright blue, filled
+	case "indirect":
+		depPill(pdf, "transitive", 150, 150, 150, false) // muted, low-key
+	}
 	pdf.SetFont("Helvetica", "B", 9)
 	pdf.SetTextColor(35, 38, 45)
 	pdf.MultiCell(0, 5, pdfSafe(fmt.Sprintf("[%s] %s", f.Category, rule)), "", "L", false)
@@ -158,12 +182,6 @@ func renderFinding(pdf *fpdf.Fpdf, f *store.Finding, o sevStyle) {
 		loc += "    " + f.PkgName
 		if f.PkgVer != "" {
 			loc += "@" + f.PkgVer
-		}
-		switch f.Relationship {
-		case "direct":
-			loc += "  (direct)"
-		case "indirect":
-			loc += "  (transitive)"
 		}
 		if f.FixedVer != "" {
 			loc += "  ->  fix " + f.FixedVer
