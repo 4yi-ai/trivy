@@ -1,0 +1,108 @@
+# codescan custom SAST rules
+#
+# These are project-tuned Semgrep rules that catch bug CLASSES the vendored
+# community ruleset (rules/registry) misses because they need cross-function or
+# business-logic reasoning: broken access control (IDOR) and injection sinks that
+# flow through a builder call rather than a literal SQL string.
+#
+# They live OUTSIDE rules/registry/ (which is gitignored + clone-populated at
+# image build) so they are committed to the repo and always shipped. The engine
+# runs `semgrep --config /app/rules`, which loads this file alongside the vendored
+# rules automatically — no wiring needed.
+#
+# Origin: distilled from a manual audit of a real Spring Boot + MyBatis-Plus
+# backend (see docs/codescan-v2-plan.md). Patterns are written high-precision
+# first; each fires on a concrete, reviewed real-world finding.
+
+rules:
+  # ────────────────────────────────────────────────────────────────────────────
+  # IDOR / horizontal privilege escalation: an endpoint trusts a request-supplied
+  # userId, only falling back to the authenticated user when the DTO field is
+  # null. An attacker sets userId=<victim> to act as / read another user.
+  # Real hits: UserAddressServiceImpl, UserPickupInfoServiceImpl,
+  # OrderCheckServiceImpl, UserCouponServiceImpl (claim), FeedbackServiceImpl.
+  # Fix server-side: overwrite the DTO userId with the authenticated id before
+  # use, or ignore the DTO field entirely.
+  # ────────────────────────────────────────────────────────────────────────────
+  - id: idor-user-controlled-userid-fallback
+    languages: [java]
+    severity: ERROR
+    message: >-
+      Endpoint trusts a request-supplied userId: it only falls back to the
+      authenticated user when the DTO's userId is null, so a client can send
+      userId=<victim> to act as or read another user (IDOR / broken access
+      control, CWE-639). Do not accept userId from the client on user-scoped
+      endpoints — always derive it from the authenticated principal.
+    metadata:
+      category: security
+      cwe: "CWE-639: Authorization Bypass Through User-Controlled Key"
+      confidence: HIGH
+      references:
+        - https://owasp.org/Top10/A01_2021-Broken_Access_Control/
+    patterns:
+      - pattern-either:
+          - pattern: Optional.ofNullable($DTO.getUserId()).orElse($CUR)
+          - pattern: Optional.ofNullable($DTO.getUserId()).orElseGet($CUR)
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # SQL injection via ORDER BY: MyBatis-Plus orderBy(cond, asc, <column>) splices
+  # the column string straight into the SQL — column names are never
+  # parameterized. If the column is a variable (not a fixed literal) it is very
+  # often a request-supplied sort field with an incomplete whitelist.
+  # Real hit: StatisticsUserServiceImpl (sortField from the query string).
+  # ────────────────────────────────────────────────────────────────────────────
+  - id: sqli-orderby-dynamic-column
+    languages: [java]
+    severity: ERROR
+    message: >-
+      Dynamic column passed to MyBatis-Plus orderBy()/.last(): column names are
+      spliced into SQL unparameterized (SQL injection, CWE-89). If this value
+      comes from a request sort field, restrict it to a fixed allowlist of known
+      columns and reject anything else — an incomplete if/else mapping is not
+      enough.
+    metadata:
+      category: security
+      cwe: "CWE-89: SQL Injection"
+      confidence: MEDIUM
+      note: review — flags any non-literal ORDER BY column; a hardcoded allowlist is safe.
+    patterns:
+      - pattern-either:
+          - pattern: $W.orderBy($COND, $DIR, $FIELD)
+          - pattern: $W.orderByAsc($FIELD + $X)
+          - pattern: $W.orderByDesc($FIELD + $X)
+          - pattern: $W.last("ORDER BY" + $X)
+          - pattern: $W.last("ORDER BY " + $X)
+      # exclude the safe case: a hardcoded string literal column.
+      - pattern-not: $W.orderBy($COND, $DIR, "...")
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # SSRF: an outbound HTTP fetch whose URL is a variable (not a constant), i.e.
+  # potentially request-controlled. hutool HttpUtil follows redirects by default,
+  # which defeats naive host allowlists.
+  # Real hit: DecorateShareServiceImpl.importUrl (url from @RequestParam, and the
+  # endpoint is also missing @PreAuthorize).
+  # ────────────────────────────────────────────────────────────────────────────
+  - id: ssrf-outbound-fetch-dynamic-url
+    languages: [java]
+    severity: ERROR
+    message: >-
+      Outbound HTTP request built from a non-constant URL (potential SSRF,
+      CWE-918). If the URL is request-controlled, an attacker can reach internal
+      services or cloud metadata (169.254.169.254). Allowlist scheme=https +
+      resolved host, block private/loopback/link-local ranges, and re-validate
+      after redirects.
+    metadata:
+      category: security
+      cwe: "CWE-918: Server-Side Request Forgery"
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: cn.hutool.http.HttpUtil.get($URL)
+          - pattern: cn.hutool.http.HttpUtil.get($URL, ...)
+          - pattern: HttpUtil.get($URL)
+          - pattern: HttpUtil.get($URL, ...)
+          - pattern: HttpUtil.post($URL, ...)
+      # exclude constant URLs (hardcoded endpoints are not user-controlled).
+      - pattern-not: HttpUtil.get("...")
+      - pattern-not: HttpUtil.get("...", ...)
+      - pattern-not: HttpUtil.post("...", ...)
