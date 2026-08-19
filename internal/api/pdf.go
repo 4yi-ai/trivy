@@ -60,6 +60,12 @@ func buildPDF(job *store.Job, findings []store.Finding) ([]byte, error) {
 	drawSummary(pdf, sum, len(findings))
 	pdf.Ln(10)
 
+	// Priority box: pull CodeScan's own custom-rule findings (business-logic
+	// vulns the community pack misses — IDOR/authz, SQLi, SSRF) to the very top
+	// so the highest-value issues aren't buried under hundreds of dependency
+	// CVEs. Full detail still appears in the severity sections below.
+	drawPriority(pdf, findings)
+
 	if len(findings) == 0 {
 		pdf.SetFont("Helvetica", "", 11)
 		pdf.SetTextColor(60, 120, 80)
@@ -131,6 +137,96 @@ func drawSummary(pdf *fpdf.Fpdf, s *store.Summary, total int) {
 	pdf.SetTextColor(120, 120, 120)
 	pdf.SetFont("Helvetica", "", 10)
 	pdf.CellFormat(0, 7, fmt.Sprintf("  %d total", total), "", 0, "L", false, 0, "")
+}
+
+// priorityClass groups CodeScan's custom-rule findings (rules.custom.*) into a
+// small set of high-value vulnerability classes, shown in the top PRIORITY box.
+// match is a substring of the custom rule id; order = how urgently to look.
+type priorityClass struct {
+	match   string
+	label   string
+	r, g, b int
+}
+
+var priorityClasses = []priorityClass{
+	{"idor", "BROKEN ACCESS CONTROL / IDOR", 176, 42, 55},
+	{"sqli", "SQL INJECTION (order-by)", 200, 60, 40},
+	{"ssrf", "SSRF (outbound fetch)", 205, 110, 30},
+}
+
+// isCustomRule reports whether a finding came from CodeScan's own hand-written
+// rules (rules/custom/*), i.e. the verified business-logic classes we surface.
+func isCustomRule(f *store.Finding) bool {
+	return strings.HasPrefix(f.RuleID, "rules.custom.")
+}
+
+// drawPriority renders a highlighted box at the top of the report listing the
+// custom-rule findings first, grouped by class, so the reader sees the
+// highest-value issues before the long dependency list. No-op when there are
+// none. Note: some classes are review-tier (no taint tracking), so the box says
+// "review" rather than asserting every hit is exploitable.
+func drawPriority(pdf *fpdf.Fpdf, findings []store.Finding) {
+	byClass := map[string][]store.Finding{}
+	total := 0
+	for i := range findings {
+		f := &findings[i]
+		if !isCustomRule(f) {
+			continue
+		}
+		for _, c := range priorityClasses {
+			if strings.Contains(f.RuleID, c.match) {
+				byClass[c.match] = append(byClass[c.match], *f)
+				total++
+				break
+			}
+		}
+	}
+	if total == 0 {
+		return
+	}
+
+	// Banner.
+	pdf.SetFillColor(150, 32, 44)
+	pdf.SetTextColor(255, 255, 255)
+	pdf.SetFont("Helvetica", "B", 11)
+	pdf.CellFormat(0, 8, pdfSafe(fmt.Sprintf("  PRIORITY - CODE VULNERABILITIES  (%d)", total)),
+		"", 1, "L", true, 0, "")
+	pdf.SetFont("Helvetica", "", 8)
+	pdf.SetTextColor(90, 96, 105)
+	pdf.MultiCell(0, 4, pdfSafe("Business-logic issues found by CodeScan's own rules (NOT dependency CVEs) - "+
+		"the highest-value findings, easy to miss below. Fix the access-control and SQL-injection items first; "+
+		"SSRF/order-by are review-tier. Each is listed in full in the severity sections below."),
+		"", "L", false)
+	pdf.Ln(2)
+
+	for _, c := range priorityClasses {
+		fs := byClass[c.match]
+		if len(fs) == 0 {
+			continue
+		}
+		// Class row: colored keyline + filled pill (label) + count.
+		y := pdf.GetY()
+		pdf.SetFillColor(c.r, c.g, c.b)
+		pdf.Rect(15, y, 1.2, 4.4, "F")
+		pdf.SetX(18)
+		depPill(pdf, c.label, c.r, c.g, c.b, true)
+		pdf.SetFont("Helvetica", "B", 8)
+		pdf.SetTextColor(70, 74, 82)
+		pdf.CellFormat(0, 4.4, pdfSafe(fmt.Sprintf("  x %d", len(fs))), "", 1, "L", false, 0, "")
+		// One compact location line per hit.
+		pdf.SetFont("Helvetica", "", 7.5)
+		pdf.SetTextColor(110, 115, 125)
+		for i := range fs {
+			loc := fs[i].FilePath
+			if fs[i].Line > 0 {
+				loc += fmt.Sprintf(":%d", fs[i].Line)
+			}
+			pdf.SetX(20)
+			pdf.MultiCell(0, 3.6, pdfSafe(loc), "", "L", false)
+		}
+		pdf.Ln(1.5)
+	}
+	pdf.Ln(4)
 }
 
 // depPill draws a small inline tag (used for DIRECT / transitive). It advances
