@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/4yi-ai/codescan/internal/reach"
 	"github.com/4yi-ai/codescan/internal/source"
 	"github.com/4yi-ai/codescan/internal/store"
 )
@@ -81,7 +82,8 @@ func (r *realRunner) Run(ctx context.Context, job *store.Job, sec Secret) error 
 		all = append(all, found...)
 	}
 
-	// ---- persist ----
+	// ---- reachability (lightweight) + persist ----
+	tagReachability(srcDir, all)
 	all = dedupe(all)
 	if err := r.store.InsertFindings(ctx, all); err != nil {
 		return err
@@ -117,6 +119,43 @@ func (r *realRunner) fetch(ctx context.Context, job *store.Job, sec Secret, srcD
 	default:
 		return fmt.Errorf("unknown source type %q", job.SourceType)
 	}
+}
+
+// tagReachability marks each DIRECT npm-dependency finding as "used" or
+// "unused_suspected" by checking whether the package is imported anywhere in the
+// project's own source. Best-effort and package-level only (see internal/reach);
+// on any error it leaves findings untagged. Only direct deps are tagged —
+// transitive deps are never imported directly, so "unused" is meaningless there.
+func tagReachability(srcDir string, fs []store.Finding) {
+	need := false
+	for i := range fs {
+		if isDirectNPM(&fs[i]) {
+			need = true
+			break
+		}
+	}
+	if !need {
+		return
+	}
+	used, err := reach.UsedNPMPackages(srcDir)
+	if err != nil {
+		return
+	}
+	for i := range fs {
+		f := &fs[i]
+		if !isDirectNPM(f) {
+			continue
+		}
+		if used[f.PkgName] {
+			f.Usage = "used"
+		} else {
+			f.Usage = "unused_suspected"
+		}
+	}
+}
+
+func isDirectNPM(f *store.Finding) bool {
+	return f.Relationship == "direct" && f.PkgName != "" && reach.IsNPMLockPath(f.FilePath)
 }
 
 // dedupe collapses redundant findings while preserving distinct ones:

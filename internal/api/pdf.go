@@ -166,6 +166,9 @@ func renderFinding(pdf *fpdf.Fpdf, f *store.Finding, o sevStyle) {
 	switch f.Relationship {
 	case "direct":
 		depPill(pdf, "DIRECT", 56, 132, 255, true) // bright blue, filled
+		if f.Usage == "unused_suspected" {
+			depPill(pdf, "unused?", 190, 150, 40, false) // muted amber
+		}
 	case "indirect":
 		depPill(pdf, "transitive", 150, 150, 150, false) // muted, low-key
 	}

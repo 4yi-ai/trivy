@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS findings (
   fixed_ver TEXT,                        -- version that fixes the issue
   cve       TEXT,
   relationship TEXT,                     -- SCA: direct | indirect (dependency kind)
+  usage     TEXT,                        -- SCA(direct/npm): used | unused_suspected
   raw       TEXT                         -- original JSON fragment, for export/trace
 );
 

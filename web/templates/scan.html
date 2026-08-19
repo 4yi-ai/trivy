@@ -38,6 +38,7 @@
       <a href="#" data-filter="medium">medium</a>
       <a href="#" data-filter="low">low</a>
       <a href="#" id="direct-only" data-active="0" title="Direct dependencies are ones you declare yourself — fix those first">direct deps</a>
+      <a href="#" id="hide-unused" data-active="0" title="Hide direct deps that are never imported in the source (suspected unused)">hide unused?</a>
     </div>
   </div>
 
@@ -45,9 +46,9 @@
     <thead><tr><th>Sev</th><th>Category</th><th>Rule</th><th>Location</th><th>Detail</th></tr></thead>
     <tbody>
       {{range .Findings}}
-      <tr data-sev="{{.Severity}}" data-rel="{{.Relationship}}">
+      <tr data-sev="{{.Severity}}" data-rel="{{.Relationship}}" data-usage="{{.Usage}}">
         <td><span class="pill c-{{.Severity}}">{{.Severity}}</span></td>
-        <td>{{.Category}}{{if eq .Relationship "direct"}} <span class="dep dep-direct">direct</span>{{else if eq .Relationship "indirect"}} <span class="dep dep-indirect">transitive</span>{{end}}</td>
+        <td>{{.Category}}{{if eq .Relationship "direct"}} <span class="dep dep-direct">direct</span>{{if eq .Usage "unused_suspected"}} <span class="dep dep-unused">unused?</span>{{end}}{{else if eq .Relationship "indirect"}} <span class="dep dep-indirect">transitive</span>{{end}}</td>
         <td class="mono small">{{.RuleID}}</td>
         <td class="mono small">{{.FilePath}}{{if .Line}}:{{.Line}}{{end}}
           {{if .PkgName}}<span class="muted">{{.PkgName}}{{if .PkgVer}}@{{.PkgVer}}{{end}}</span>{{end}}</td>

@@ -48,9 +48,11 @@ func Open(dbPath string) (*Store, error) {
 	// Schema evolution for DBs created before a column existed. CREATE TABLE IF
 	// NOT EXISTS above does NOT add columns to an existing table, so add them
 	// idempotently here (keeps existing scan history intact).
-	if err := addColumnIfMissing(db, "findings", "relationship", "TEXT"); err != nil {
-		_ = db.Close()
-		return nil, err
+	for _, col := range []string{"relationship", "usage"} {
+		if err := addColumnIfMissing(db, "findings", col, "TEXT"); err != nil {
+			_ = db.Close()
+			return nil, err
+		}
 	}
 	return &Store{db: db}, nil
 }

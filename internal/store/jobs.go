@@ -70,6 +70,7 @@ type Finding struct {
 	FixedVer     string `json:"fixed_ver,omitempty"`
 	CVE          string `json:"cve,omitempty"`
 	Relationship string `json:"relationship,omitempty"` // SCA: direct | indirect
+	Usage        string `json:"usage,omitempty"`        // SCA(direct/npm): used | unused_suspected
 	Raw          string `json:"raw,omitempty"`
 }
 
@@ -289,8 +290,8 @@ func (s *Store) InsertFindings(ctx context.Context, fs []Finding) error {
 
 	stmt, err := tx.PrepareContext(ctx,
 		`INSERT INTO findings (job_id, tool, category, severity, rule_id, title,
-		    message, file_path, line, pkg_name, pkg_ver, fixed_ver, cve, relationship, raw)
-		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+		    message, file_path, line, pkg_name, pkg_ver, fixed_ver, cve, relationship, usage, raw)
+		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
 	if err != nil {
 		return fmt.Errorf("prepare: %w", err)
 	}
@@ -300,7 +301,7 @@ func (s *Store) InsertFindings(ctx context.Context, fs []Finding) error {
 		f := &fs[i]
 		if _, err := stmt.ExecContext(ctx, f.JobID, f.Tool, f.Category, f.Severity,
 			f.RuleID, f.Title, f.Message, f.FilePath, f.Line, f.PkgName, f.PkgVer,
-			f.FixedVer, f.CVE, f.Relationship, f.Raw); err != nil {
+			f.FixedVer, f.CVE, f.Relationship, f.Usage, f.Raw); err != nil {
 			return fmt.Errorf("insert finding: %w", err)
 		}
 	}
@@ -334,12 +335,14 @@ func (s *Store) ListFindings(ctx context.Context, jobID string, f FindingFilter)
 	}
 
 	query := `SELECT id, job_id, tool, category, severity, rule_id, title, message,
-	                 file_path, line, pkg_name, pkg_ver, fixed_ver, cve, relationship, raw
+	                 file_path, line, pkg_name, pkg_ver, fixed_ver, cve, relationship, usage, raw
 	          FROM findings WHERE ` + strings.Join(conds, " AND ") +
 		` ORDER BY CASE severity
 		     WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2
 		     WHEN 'low' THEN 3 ELSE 4 END,
-		   CASE WHEN relationship = 'direct' THEN 0 ELSE 1 END,
+		   CASE WHEN relationship = 'direct' AND COALESCE(usage,'') != 'unused_suspected' THEN 0
+		        WHEN relationship = 'direct' THEN 1
+		        ELSE 2 END,
 		   file_path, line, id`
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
@@ -353,18 +356,18 @@ func (s *Store) ListFindings(ctx context.Context, jobID string, f FindingFilter)
 		var (
 			f                                                   Finding
 			ruleID, title, msg, file, pkgName, pkgVer, fixedVer sql.NullString
-			cve, relationship, raw                              sql.NullString
+			cve, relationship, usage, raw                       sql.NullString
 			line                                                sql.NullInt64
 		)
 		if err := rows.Scan(&f.ID, &f.JobID, &f.Tool, &f.Category, &f.Severity,
 			&ruleID, &title, &msg, &file, &line, &pkgName, &pkgVer, &fixedVer,
-			&cve, &relationship, &raw); err != nil {
+			&cve, &relationship, &usage, &raw); err != nil {
 			return nil, err
 		}
 		f.RuleID, f.Title, f.Message, f.FilePath = ruleID.String, title.String, msg.String, file.String
 		f.Line = int(line.Int64)
 		f.PkgName, f.PkgVer, f.FixedVer = pkgName.String, pkgVer.String, fixedVer.String
-		f.CVE, f.Relationship, f.Raw = cve.String, relationship.String, raw.String
+		f.CVE, f.Relationship, f.Usage, f.Raw = cve.String, relationship.String, usage.String, raw.String
 		out = append(out, f)
 	}
 	return out, rows.Err()

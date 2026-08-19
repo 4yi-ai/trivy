@@ -139,15 +139,18 @@
   function wireFilters() {
     var sevLinks = document.querySelectorAll("#filters a[data-filter]");
     var directBtn = document.getElementById("direct-only");
+    var hideUnusedBtn = document.getElementById("hide-unused");
     var rows = document.querySelectorAll("#findings-table tbody tr[data-sev]");
     var sev = "";          // "" = all severities
     var directOnly = false;
+    var hideUnused = false;
 
     function apply() {
       rows.forEach(function (row) {
         var okSev = sev === "" || row.getAttribute("data-sev") === sev;
         var okDep = !directOnly || row.getAttribute("data-rel") === "direct";
-        row.classList.toggle("hidden", !(okSev && okDep));
+        var okUse = !hideUnused || row.getAttribute("data-usage") !== "unused_suspected";
+        row.classList.toggle("hidden", !(okSev && okDep && okUse));
       });
     }
 
@@ -160,13 +163,16 @@
       });
     });
 
-    if (directBtn) {
-      directBtn.addEventListener("click", function (e) {
+    function toggle(btn, set) {
+      if (!btn) return;
+      btn.addEventListener("click", function (e) {
         e.preventDefault();
-        directOnly = !directOnly;
-        directBtn.classList.toggle("active", directOnly);
+        btn.classList.toggle("active");
+        set(btn.classList.contains("active"));
         apply();
       });
     }
+    toggle(directBtn, function (v) { directOnly = v; });
+    toggle(hideUnusedBtn, function (v) { hideUnused = v; });
   }
 })();
