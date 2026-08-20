@@ -165,7 +165,8 @@
     var sevLinks = document.querySelectorAll("#filters a[data-filter]");
     var directBtn = document.getElementById("direct-only");
     var hideUnusedBtn = document.getElementById("hide-unused");
-    var rows = document.querySelectorAll("#findings-table tbody tr[data-sev]");
+    var rows = document.querySelectorAll("#findings-card tr[data-sev]");
+    var tiers = document.querySelectorAll("#findings-card .tier");
     var sev = "";          // "" = all severities
     var directOnly = false;
     var hideUnused = false;
@@ -176,6 +177,11 @@
         var okDep = !directOnly || row.getAttribute("data-rel") === "direct";
         var okUse = !hideUnused || row.getAttribute("data-usage") !== "unused_suspected";
         row.classList.toggle("hidden", !(okSev && okDep && okUse));
+      });
+      // Collapse a whole tier when the active filter leaves it with no rows.
+      tiers.forEach(function (t) {
+        var visible = t.querySelectorAll("tr[data-sev]:not(.hidden)").length;
+        t.classList.toggle("hidden", visible === 0);
       });
     }
 

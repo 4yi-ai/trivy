@@ -109,6 +109,35 @@ th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: upp
 .pill.c-medium { background: var(--medium); }
 .pill.c-low { background: var(--low); }
 .pill.c-info { background: var(--info); }
+
+/* Stats table: category x severity counts */
+.stats td, .stats th { text-align: center; }
+.stats th:first-child, .stats td.stat-cat { text-align: left; }
+.stats .stat-cat { font-weight: 600; color: var(--fg); }
+.stats .stat-tot { font-weight: 700; color: var(--fg); }
+.stats td.z { color: #4b515c; }
+.stats td.c-critical { color: var(--critical); font-weight: 700; }
+.stats td.c-high { color: var(--high); font-weight: 700; }
+.stats td.c-medium { color: var(--medium); font-weight: 700; }
+.stats td.c-low { color: var(--low); font-weight: 700; }
+.stats td.c-info { color: var(--info); font-weight: 700; }
+
+/* Priority tiers on the scan page */
+.tier { margin-top: 20px; }
+.tier:first-of-type { margin-top: 6px; }
+.tier-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 12px; border-radius: 8px; color: #fff; font-weight: 700; font-size: 14px;
+}
+.tier-head .tier-count {
+  margin-left: auto; background: rgba(255,255,255,.25);
+  border-radius: 20px; padding: 1px 11px; font-size: 13px;
+}
+.tier-p1 .tier-head { background: #96202c; }
+.tier-p2 .tier-head { background: #386ec8; }
+.tier-p3 .tier-head { background: #b98a1f; color: #1c1608; }
+.tier-p4 .tier-head { background: #6b7280; }
+.tier-sub { margin: 6px 2px 6px; }
 .counts { display: inline-flex; gap: 4px; }
 
 .meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 6px 0 0; }

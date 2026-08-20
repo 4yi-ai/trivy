@@ -73,5 +73,10 @@ func (s *Server) handleScanPage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not load findings", http.StatusInternalServerError)
 		return
 	}
-	s.render(w, s.pages.scan, map[string]any{"Job": job, "Findings": findings})
+	s.render(w, s.pages.scan, map[string]any{
+		"Job":      job,
+		"Findings": findings,
+		"Stats":    buildStats(findings),
+		"Tiers":    buildTiers(findings),
+	})
 }

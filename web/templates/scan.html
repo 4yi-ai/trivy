@@ -28,6 +28,28 @@
   </div>
 </section>
 
+{{if .Stats}}
+<section class="card">
+  <h2>统计 <span class="muted small">按类型 × 严重度</span></h2>
+  <table class="stats">
+    <thead><tr><th>类型</th><th>Critical</th><th>High</th><th>Medium</th><th>Low</th><th>Info</th><th>Total</th></tr></thead>
+    <tbody>
+      {{range .Stats}}
+      <tr>
+        <td class="stat-cat">{{.Label}}</td>
+        <td class="{{if .Crit}}c-critical{{else}}z{{end}}">{{if .Crit}}{{.Crit}}{{else}}–{{end}}</td>
+        <td class="{{if .High}}c-high{{else}}z{{end}}">{{if .High}}{{.High}}{{else}}–{{end}}</td>
+        <td class="{{if .Med}}c-medium{{else}}z{{end}}">{{if .Med}}{{.Med}}{{else}}–{{end}}</td>
+        <td class="{{if .Low}}c-low{{else}}z{{end}}">{{if .Low}}{{.Low}}{{else}}–{{end}}</td>
+        <td class="{{if .Info}}c-info{{else}}z{{end}}">{{if .Info}}{{.Info}}{{else}}–{{end}}</td>
+        <td class="stat-tot">{{.Tot}}</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+</section>
+{{end}}
+
 <section class="card" id="findings-card">
   <div class="row-between">
     <h2>Findings <span class="muted small">({{len .Findings}})</span></h2>
@@ -42,26 +64,35 @@
     </div>
   </div>
 
-  <table class="findings" id="findings-table">
-    <thead><tr><th>Sev</th><th>Category</th><th>Rule</th><th>Location</th><th>Detail</th></tr></thead>
-    <tbody>
-      {{range .Findings}}
-      <tr data-sev="{{.Severity}}" data-rel="{{.Relationship}}" data-usage="{{.Usage}}">
-        <td><span class="pill c-{{.Severity}}">{{.Severity}}</span></td>
-        <td>{{.Category}}{{if eq .Relationship "direct"}} <span class="dep dep-direct">direct</span>{{if eq .Usage "unused_suspected"}} <span class="dep dep-unused">unused?</span>{{end}}{{else if eq .Relationship "indirect"}} <span class="dep dep-indirect">transitive</span>{{end}}</td>
-        <td class="mono small">{{.RuleID}}</td>
-        <td class="mono small">{{.FilePath}}{{if .Line}}:{{.Line}}{{end}}
-          {{if .PkgName}}<span class="muted">{{.PkgName}}{{if .PkgVer}}@{{.PkgVer}}{{end}}</span>{{end}}</td>
-        <td>{{.Title}}{{if .FixedVer}} <span class="muted small">fix: {{.FixedVer}}</span>{{end}}</td>
-      </tr>
-      {{else}}
-      <tr id="no-findings"><td colspan="5" class="muted">
-        {{if or (eq .Job.Status "queued") (eq .Job.Status "fetching") (eq .Job.Status "scanning")}}
-          Scan in progress…
-        {{else}}No findings.{{end}}
-      </td></tr>
-      {{end}}
-    </tbody>
-  </table>
+  {{range .Tiers}}
+  <div class="tier tier-{{.Class}}" data-tier="{{.Num}}">
+    <div class="tier-head tier-{{.Class}}">
+      <span class="tier-label">{{.Label}}</span>
+      <span class="tier-count">{{len .Findings}}</span>
+    </div>
+    <p class="tier-sub muted small">{{.Subtitle}}</p>
+    <table class="findings">
+      <thead><tr><th>Sev</th><th>Category</th><th>Rule</th><th>Location</th><th>Detail</th></tr></thead>
+      <tbody>
+        {{range .Findings}}
+        <tr data-sev="{{.Severity}}" data-rel="{{.Relationship}}" data-usage="{{.Usage}}">
+          <td><span class="pill c-{{.Severity}}">{{.Severity}}</span></td>
+          <td>{{.Category}}{{if eq .Relationship "direct"}} <span class="dep dep-direct">direct</span>{{if eq .Usage "unused_suspected"}} <span class="dep dep-unused">unused?</span>{{end}}{{else if eq .Relationship "indirect"}} <span class="dep dep-indirect">transitive</span>{{end}}</td>
+          <td class="mono small">{{.RuleID}}</td>
+          <td class="mono small">{{.FilePath}}{{if .Line}}:{{.Line}}{{end}}
+            {{if .PkgName}}<span class="muted">{{.PkgName}}{{if .PkgVer}}@{{.PkgVer}}{{end}}</span>{{end}}</td>
+          <td>{{.Title}}{{if .FixedVer}} <span class="muted small">fix: {{.FixedVer}}</span>{{end}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+  {{else}}
+  <p id="no-findings" class="muted">
+    {{if or (eq .Job.Status "queued") (eq .Job.Status "fetching") (eq .Job.Status "scanning")}}
+      Scan in progress…
+    {{else}}No findings.{{end}}
+  </p>
+  {{end}}
 </section>
 {{end}}
