@@ -239,6 +239,28 @@ func (s *Server) handleCancelScan(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": store.StatusCanceled})
 }
 
+// handleDeleteScan deletes a finished scan (its findings, DB row, and on-disk
+// working dir). Refuses to delete a queued/running scan — cancel it first.
+func (s *Server) handleDeleteScan(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	err := s.store.DeleteJob(r.Context(), id)
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		writeErr(w, http.StatusNotFound, "scan not found")
+		return
+	case errors.Is(err, store.ErrInProgress):
+		writeErr(w, http.StatusConflict, "scan is still running — cancel it first")
+		return
+	case err != nil:
+		writeErr(w, http.StatusInternalServerError, "could not delete scan")
+		return
+	}
+	// Best-effort: remove the job's working dir so uploads/clones don't linger.
+	// The DB row is already gone, so a leftover dir is harmless if this fails.
+	_ = os.RemoveAll(filepath.Join(s.mgr.JobsDir(), id))
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
 // newID returns a random RFC-4122 v4 UUID string, without pulling in an external
 // dependency.
 func newID() (string, error) {

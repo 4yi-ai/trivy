@@ -28,6 +28,31 @@
     box.classList.remove("hidden");
   }
 
+  // ---- recent-scans list: delete a scan ----
+  document.querySelectorAll("button[data-del]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var id = btn.getAttribute("data-del");
+      if (!window.confirm("Delete this scan and its findings? This cannot be undone.")) return;
+      btn.disabled = true;
+      fetch("/api/scans/" + id, { method: "DELETE" })
+        .then(function (res) {
+          if (res.ok) {
+            var row = document.querySelector('tr[data-row="' + id + '"]');
+            if (row) row.remove();
+            return;
+          }
+          return res.json().catch(function () { return {}; }).then(function (data) {
+            btn.disabled = false;
+            window.alert(data.error || "Could not delete scan (HTTP " + res.status + ").");
+          });
+        })
+        .catch(function () {
+          btn.disabled = false;
+          window.alert("Could not delete scan — network error.");
+        });
+    });
+  });
+
   // ---- git form → JSON POST ----
   var gitForm = document.getElementById("git-form");
   if (gitForm) {

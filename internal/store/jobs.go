@@ -248,6 +248,43 @@ func (s *Store) Cancel(ctx context.Context, id string) (bool, error) {
 	return n > 0, nil
 }
 
+// ErrInProgress is returned when an operation requires a terminal job but the
+// job is still queued/running.
+var ErrInProgress = errors.New("job in progress")
+
+// DeleteJob removes a job and its findings. It refuses to delete a job that is
+// still queued/running (its working dir may be in use by the worker) — returns
+// ErrInProgress so the caller can ask the user to cancel first. Returns
+// ErrNotFound if the id does not exist. Findings + job row are removed together
+// in one transaction so a delete never leaves orphaned findings behind.
+func (s *Store) DeleteJob(ctx context.Context, id string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("delete job: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// Gate on status first: unknown id -> not found; still-running -> in progress.
+	var status string
+	switch e := tx.QueryRowContext(ctx, `SELECT status FROM jobs WHERE id = ?`, id).Scan(&status); {
+	case errors.Is(e, sql.ErrNoRows):
+		return ErrNotFound
+	case e != nil:
+		return fmt.Errorf("delete job: %w", e)
+	case status == StatusQueued, status == StatusFetching, status == StatusScanning:
+		return ErrInProgress
+	}
+
+	// Delete children before the parent — findings carry a FK to jobs(id).
+	if _, err := tx.ExecContext(ctx, `DELETE FROM findings WHERE job_id = ?`, id); err != nil {
+		return fmt.Errorf("delete findings: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM jobs WHERE id = ?`, id); err != nil {
+		return fmt.Errorf("delete job: %w", err)
+	}
+	return tx.Commit()
+}
+
 // IsCanceled reports whether the job's persisted status is canceled. The worker
 // polls this so an API cancel can stop an in-flight scan.
 func (s *Store) IsCanceled(ctx context.Context, id string) (bool, error) {

@@ -35,18 +35,19 @@
     <a class="muted small" href="/">refresh</a>
   </div>
   <table class="scans" id="scan-list">
-    <thead><tr><th>Source</th><th>Type</th><th>Status</th><th>Findings</th><th>Created</th></tr></thead>
+    <thead><tr><th>Source</th><th>Type</th><th>Status</th><th>Findings</th><th>Created</th><th></th></tr></thead>
     <tbody>
       {{range .Scans}}
-      <tr>
+      <tr data-row="{{.ID}}">
         <td class="mono"><a href="/scans/{{.ID}}">{{.SourceRef}}</a></td>
         <td>{{.SourceType}}</td>
         <td><span class="badge s-{{.Status}}">{{.Status}}</span></td>
         <td>{{template "sevcounts" .Summary}}</td>
         <td class="muted small" data-ts="{{.CreatedAt}}">{{.CreatedAt}}</td>
+        <td><button type="button" class="del-scan" data-del="{{.ID}}" title="Delete this scan" aria-label="Delete scan">&times;</button></td>
       </tr>
       {{else}}
-      <tr><td colspan="5" class="muted">No scans yet.</td></tr>
+      <tr><td colspan="6" class="muted">No scans yet.</td></tr>
       {{end}}
     </tbody>
   </table>

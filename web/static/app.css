@@ -66,6 +66,13 @@ button:hover, .btn:hover { filter: brightness(1.08); text-decoration: none; }
 .btn { background: var(--card-2); border: 1px solid var(--line); color: var(--fg); }
 .btn.primary { background: var(--accent); border-color: transparent; color: #fff; }
 .btn.danger { background: transparent; border-color: var(--critical); color: var(--critical); }
+/* Small ✕ delete button in the recent-scans list — subtle until hovered. */
+.del-scan {
+  background: transparent; color: var(--muted); border: none; border-radius: 6px;
+  padding: 2px 8px; font-size: 18px; line-height: 1; cursor: pointer; align-self: auto;
+}
+.del-scan:hover { background: color-mix(in srgb, var(--critical) 15%, transparent); color: var(--critical); filter: none; }
+.del-scan:disabled { opacity: .4; cursor: default; }
 .hint { color: var(--muted); font-size: 12px; margin: 0; }
 .actions { display: flex; align-items: center; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
 .error { color: var(--critical); }

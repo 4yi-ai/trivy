@@ -37,6 +37,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/scans/{id}/findings", s.handleListFindings)
 	mux.HandleFunc("GET /api/scans/{id}/export", s.handleExport)
 	mux.HandleFunc("POST /api/scans/{id}/cancel", s.handleCancelScan)
+	mux.HandleFunc("DELETE /api/scans/{id}", s.handleDeleteScan)
 
 	// Server-rendered pages.
 	mux.HandleFunc("GET /{$}", s.handleIndex)
