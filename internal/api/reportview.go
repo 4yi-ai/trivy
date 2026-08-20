@@ -31,9 +31,10 @@ type TierGroup struct {
 // Chinese here (HTML, not the Latin-1 PDF), matching how the app is used.
 var webTiers = []struct{ label, subtitle, class string }{
 	{"P1 · 代码漏洞（已验证）", "CodeScan 自定义规则查出的越权 / SQL 注入 / SSRF —— 优先修复", "p1"},
-	{"P2 · 直接依赖", "你自己声明的包，升版本即可修复。按严重度排序", "p2"},
-	{"P3 · 配置 & 密钥", "IaC 配置、泄露密钥、通用代码坏味道", "p3"},
-	{"P4 · 传递依赖", "被其它包间接带入 —— 通常升父包后自动修复。按严重度排序", "p4"},
+	{"P2 · 代码问题（SAST 扫描）", "对你自己代码的静态扫描：注入、弱加密、不安全 TLS、坏味道等。按严重度排序", "p2"},
+	{"P3 · 直接依赖", "你自己声明的包，升版本即可修复。按严重度排序", "p3"},
+	{"P4 · 密钥 & 配置", "泄露的密钥/凭证、Dockerfile 等配置问题。泄露密钥请轮换", "p4"},
+	{"P5 · 传递依赖", "被其它包间接带入 —— 通常升父包后自动修复。按严重度排序", "p5"},
 }
 
 // buildStats returns the category x severity table rows (only categories that

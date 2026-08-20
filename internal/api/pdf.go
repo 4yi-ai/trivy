@@ -59,13 +59,16 @@ var priorityTiers = []priorityTier{
 	{"P1  CODE VULNERABILITIES (verified)",
 		"Business-logic bugs found by CodeScan's own rules (access-control/IDOR, SQL injection, SSRF). NOT dependency CVEs - fix these first.",
 		150, 32, 44},
-	{"P2  DIRECT DEPENDENCIES",
+	{"P2  CODE ISSUES (SAST scan)",
+		"Static-analysis findings in your own code (injection, weak crypto, insecure TLS, best-practice). Sorted by severity.",
+		196, 76, 52},
+	{"P3  DIRECT DEPENDENCIES",
 		"Vulnerable packages you declared yourself - fix by bumping the version. Sorted by severity.",
 		56, 110, 200},
-	{"P3  CONFIG & SECRETS",
-		"IaC misconfig, exposed secrets, and generic code-hygiene findings. Review and remediate.",
+	{"P4  SECRETS & CONFIG",
+		"Exposed secrets/keys and IaC (Dockerfile) misconfig. Rotate leaked secrets; harden config.",
 		200, 150, 40},
-	{"P4  TRANSITIVE DEPENDENCIES",
+	{"P5  TRANSITIVE DEPENDENCIES",
 		"Pulled in indirectly by other packages - usually fixed by bumping a parent dependency. Sorted by severity.",
 		140, 140, 140},
 }
@@ -81,13 +84,15 @@ func tierOf(f *store.Finding) int {
 	cat := strings.ToLower(f.Category)
 	switch {
 	case cat == "sast" && isCustomRule(f):
-		return 1 // verified code vuln
+		return 1 // verified code vuln (custom rules)
+	case cat == "sast":
+		return 2 // generic code scan (community SAST rules)
 	case cat == "sca" && f.Relationship == "direct":
-		return 2 // direct dependency
-	case cat == "iac" || cat == "secret" || cat == "sast":
-		return 3 // config / secret / generic SAST hygiene
+		return 3 // direct dependency
+	case cat == "secret" || cat == "iac":
+		return 4 // exposed secrets + IaC config
 	default:
-		return 4 // transitive / unclassified dependency
+		return 5 // transitive / unclassified dependency
 	}
 }
 

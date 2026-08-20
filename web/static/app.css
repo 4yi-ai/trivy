@@ -144,9 +144,10 @@ th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: upp
   border-radius: 20px; padding: 1px 11px; font-size: 13px;
 }
 .tier-p1 .tier-head { background: #96202c; }
-.tier-p2 .tier-head { background: #386ec8; }
-.tier-p3 .tier-head { background: #b98a1f; color: #1c1608; }
-.tier-p4 .tier-head { background: #6b7280; }
+.tier-p2 .tier-head { background: #c44c34; }
+.tier-p3 .tier-head { background: #386ec8; }
+.tier-p4 .tier-head { background: #b98a1f; color: #1c1608; }
+.tier-p5 .tier-head { background: #6b7280; }
 .tier-sub { margin: 6px 2px 6px; }
 .counts { display: inline-flex; gap: 4px; }
 
