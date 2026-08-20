@@ -57,6 +57,16 @@ input[type=url], input[type=password], input[type=file] {
   background: var(--card-2); border: 1px solid var(--line); color: var(--fg);
   border-radius: 8px; padding: 10px 12px; font-size: 14px;
 }
+input[type=file] { padding: 8px 12px; color: var(--muted); cursor: pointer; }
+/* Restyle the native "Choose File" button so it fits the dark theme instead of
+   rendering as a light-grey OS default. */
+input[type=file]::file-selector-button,
+input[type=file]::-webkit-file-upload-button {
+  background: var(--card); color: var(--fg); border: 1px solid var(--line);
+  border-radius: 6px; padding: 6px 12px; margin-right: 12px; font-size: 13px;
+  cursor: pointer;
+}
+input[type=file]::file-selector-button:hover { border-color: var(--accent); color: #fff; }
 input:focus { outline: none; border-color: var(--accent); }
 button, .btn {
   background: var(--accent); color: #fff; border: none; border-radius: 8px;
