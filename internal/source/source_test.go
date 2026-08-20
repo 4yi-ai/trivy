@@ -123,8 +123,16 @@ func TestCloneStripsGitDir(t *testing.T) {
 	run("add", ".")
 	run("commit", "-q", "-m", "init")
 
+	run("checkout", "-q", "-b", "dev")
+	if err := os.WriteFile(filepath.Join(origin, "only-on-dev.go"), []byte("package main"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run("add", ".")
+	run("commit", "-q", "-m", "dev")
+	run("checkout", "-q", "main")
+
 	dest := filepath.Join(t.TempDir(), "src")
-	if err := CloneGit(context.Background(), "file://"+origin, "", dest, DefaultGuards()); err != nil {
+	if err := CloneGit(context.Background(), "file://"+origin, "", "", dest, DefaultGuards()); err != nil {
 		t.Fatalf("clone: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dest, "main.go")); err != nil {
@@ -132,6 +140,20 @@ func TestCloneStripsGitDir(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dest, ".git")); !os.IsNotExist(err) {
 		t.Errorf(".git should have been stripped after clone (err=%v)", err)
+	}
+
+	// Cloning a specific branch pulls that branch's files.
+	destDev := filepath.Join(t.TempDir(), "src-dev")
+	if err := CloneGit(context.Background(), "file://"+origin, "", "dev", destDev, DefaultGuards()); err != nil {
+		t.Fatalf("clone dev: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(destDev, "only-on-dev.go")); err != nil {
+		t.Errorf("dev-branch file missing after branch clone: %v", err)
+	}
+
+	// A malicious branch name is rejected before git runs.
+	if err := CloneGit(context.Background(), "file://"+origin, "", "--upload-pack=touch pwned", filepath.Join(t.TempDir(), "x"), DefaultGuards()); err == nil {
+		t.Error("expected option-injection branch name to be rejected")
 	}
 }
 

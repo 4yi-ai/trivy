@@ -26,6 +26,7 @@ var ErrQueueFull = errors.New("scan queue is full")
 type Secret struct {
 	Token      string // use-once git token; dropped after clone
 	UploadPath string // local path of an uploaded zip/tar (zip source)
+	Branch     string // optional git branch/tag to clone (empty = repo default)
 }
 
 // Runner performs the fetch + engine work for one job. It reports progress and

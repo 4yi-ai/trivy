@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -49,6 +50,16 @@ func main() {
 	// enqueues from the first request are picked up immediately.
 	jobsDir := filepath.Join(dataDir, "jobs")
 	guards := source.DefaultGuards()
+	// CODESCAN_ALLOWED_HOSTS (comma-separated) adds self-hosted git hosts (e.g. a
+	// private GitLab) to the SSRF allowlist, on top of the github.com/gitlab.com
+	// defaults. Operator-configured, not user-supplied.
+	if extra := env("CODESCAN_ALLOWED_HOSTS", ""); extra != "" {
+		for _, h := range strings.Split(extra, ",") {
+			if h = strings.ToLower(strings.TrimSpace(h)); h != "" {
+				guards.AllowedHosts = append(guards.AllowedHosts, h)
+			}
+		}
+	}
 	mgr := scan.NewManager(st, scan.Config{JobsDir: jobsDir})
 
 	// Install the real fetch+engine runner. Engines self-report availability, so

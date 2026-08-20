@@ -11,11 +11,14 @@
     <label>Repository URL
       <input type="url" name="source_ref" placeholder="https://github.com/org/repo.git" required>
     </label>
+    <label>Branch <span class="muted">(optional — default branch if empty)</span>
+      <input type="text" name="branch" autocomplete="off" placeholder="e.g. main, develop">
+    </label>
     <label>Access token <span class="muted">(private repos only — used once, never stored)</span>
       <input type="password" name="token" autocomplete="off" placeholder="optional">
     </label>
     <button type="submit">Start scan</button>
-    <p class="hint">Allowed hosts: github.com, gitlab.com. HTTPS only.</p>
+    <p class="hint">Allowed hosts: {{.AllowedHosts}}. HTTPS only.</p>
   </form>
 
   <form id="zip-form" class="scan-form hidden" data-panel="zip" enctype="multipart/form-data">

@@ -62,6 +62,8 @@
       var body = { source_type: "git", source_ref: fd.get("source_ref") };
       var token = fd.get("token");
       if (token) body.token = token;
+      var branch = (fd.get("branch") || "").trim();
+      if (branch) body.branch = branch;
       submitScan({ button: submitBtn(gitForm), body: JSON.stringify(body), contentType: "application/json" });
     });
   }

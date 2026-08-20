@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 )
@@ -37,6 +38,27 @@ func SanitizeGitURL(raw string, g Guards) (string, error) {
 	return clean.String(), nil
 }
 
+// branchRe allows conservative git branch/tag names: letters, digits, and
+// . _ / - (covers "main", "release/1.2", "feature-x", "v1.0.0"). It deliberately
+// forbids anything that could be an option, a shell metacharacter, or a path
+// escape.
+var branchRe = regexp.MustCompile(`^[A-Za-z0-9._/-]+$`)
+
+// validateBranch rejects branch names that could inject a git option or contain
+// unsafe characters. Empty is allowed (clone the repo default).
+func validateBranch(branch string) error {
+	if branch == "" {
+		return nil
+	}
+	if strings.HasPrefix(branch, "-") {
+		return fmt.Errorf("invalid branch name %q", branch)
+	}
+	if len(branch) > 255 || !branchRe.MatchString(branch) {
+		return fmt.Errorf("invalid branch name %q", branch)
+	}
+	return nil
+}
+
 // CloneGit shallow-clones cleanURL into dir. If token is non-empty it is
 // injected into the clone URL for this one command and never stored elsewhere;
 // the caller must have already zeroed its own copy. cleanURL must come from
@@ -45,11 +67,15 @@ func SanitizeGitURL(raw string, g Guards) (string, error) {
 // The token is passed via the URL userinfo of an argument array (never a shell
 // string), and git is told not to prompt so a bad token fails fast instead of
 // hanging.
-func CloneGit(ctx context.Context, cleanURL, token, dir string, g Guards) error {
+func CloneGit(ctx context.Context, cleanURL, token, branch, dir string, g Guards) error {
 	if err := mustCtx(ctx); err != nil {
 		return err
 	}
 	if err := ensureEmptyDir(dir); err != nil {
+		return err
+	}
+	branch = strings.TrimSpace(branch)
+	if err := validateBranch(branch); err != nil {
 		return err
 	}
 
@@ -64,9 +90,14 @@ func CloneGit(ctx context.Context, cleanURL, token, dir string, g Guards) error 
 		cloneURL = u.String()
 	}
 
-	cmd := exec.CommandContext(ctx, "git",
-		"clone", "--depth", "1", "--single-branch", "--no-tags",
-		cloneURL, dir)
+	args := []string{"clone", "--depth", "1", "--single-branch", "--no-tags"}
+	if branch != "" {
+		args = append(args, "--branch", branch)
+	}
+	// "--" stops git from reading cloneURL/dir as options even if they were
+	// somehow crafted to start with a dash.
+	args = append(args, "--", cloneURL, dir)
+	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Env = append(cmd.Environ(),
 		"GIT_TERMINAL_PROMPT=0", // never block on a credential prompt
 		"GIT_CONFIG_NOSYSTEM=1",

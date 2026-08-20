@@ -108,7 +108,7 @@ func (r *realRunner) Run(ctx context.Context, job *store.Job, sec Secret) error 
 func (r *realRunner) fetch(ctx context.Context, job *store.Job, sec Secret, srcDir string) error {
 	switch job.SourceType {
 	case store.SourceGit:
-		return source.CloneGit(ctx, job.SourceRef, sec.Token, srcDir, r.guards)
+		return source.CloneGit(ctx, job.SourceRef, sec.Token, sec.Branch, srcDir, r.guards)
 	case store.SourceZip:
 		if sec.UploadPath == "" {
 			return fmt.Errorf("no uploaded archive for zip job")

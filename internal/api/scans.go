@@ -18,9 +18,10 @@ import (
 
 // createScanRequest is the JSON POST /api/scans body (git source).
 type createScanRequest struct {
-	SourceType string `json:"source_type"`     // git (image → v2)
-	SourceRef  string `json:"source_ref"`      // repo url
-	Token      string `json:"token,omitempty"` // use-once; never stored/logged
+	SourceType string `json:"source_type"`      // git (image → v2)
+	SourceRef  string `json:"source_ref"`       // repo url
+	Token      string `json:"token,omitempty"`  // use-once; never stored/logged
+	Branch     string `json:"branch,omitempty"` // optional branch/tag (empty = default)
 }
 
 // maxUploadBytes caps an uploaded archive (compressed). The uncompressed tree is
@@ -76,7 +77,7 @@ func (s *Server) createGitScan(w http.ResponseWriter, r *http.Request) {
 
 	token := req.Token
 	req.Token = "" // drop our struct copy immediately
-	s.enqueueJob(w, r, store.SourceGit, cleanURL, scan.Secret{Token: token})
+	s.enqueueJob(w, r, store.SourceGit, cleanURL, scan.Secret{Token: token, Branch: strings.TrimSpace(req.Branch)})
 }
 
 // createZipScan handles the multipart path: save the uploaded archive under the

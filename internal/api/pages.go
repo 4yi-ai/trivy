@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"io/fs"
 	"net/http"
+	"strings"
 
 	"github.com/4yi-ai/codescan/internal/store"
 )
@@ -53,7 +54,10 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not load scans", http.StatusInternalServerError)
 		return
 	}
-	s.render(w, s.pages.index, map[string]any{"Scans": jobs})
+	s.render(w, s.pages.index, map[string]any{
+		"Scans":        jobs,
+		"AllowedHosts": strings.Join(s.guards.AllowedHosts, ", "),
+	})
 }
 
 // handleScanPage renders one scan's result page.
